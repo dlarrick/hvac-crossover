@@ -37,7 +37,7 @@ from .config import CoordinatorConfig
 from .coordinator import DualFuelCoordinator
 from .engines import EconomicsEngine, RecoveryEngine, ArbitratorEngine
 
-__version__ = "0.1.1
+__version__ = "0.1.1"
 __all__ = [
     "CoordinatorConfig",
     "DualFuelCoordinator",
