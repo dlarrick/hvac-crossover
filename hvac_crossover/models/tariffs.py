@@ -1,7 +1,8 @@
-"""Utility tariff and energy pricing data models."""
-
+from __future__ import annotations
 from dataclasses import dataclass
+from typing import Optional
 from .enums import NetMeteringMode
+
 
 
 @dataclass(frozen=True)
