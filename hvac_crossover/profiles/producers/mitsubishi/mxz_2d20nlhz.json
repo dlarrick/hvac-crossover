@@ -1,0 +1,30 @@
+{
+  "make": "Mitsubishi Electric",
+  "series": "Multi-Zone Hyper-Heating (H2i)",
+  "model": "MXZ-2D20NLHZ",
+  "vintage": 2026,
+  "producer_type": "inverter_heat_pump",
+  "refrigerant": "R454B",
+  "max_ports": 2,
+  "nominal_heating_btu": 20000,
+  "nominal_cooling_btu": 20000,
+  "heating_performance": {
+    "full_load_cop": {
+      "47": 3.95,
+      "17": 1.95,
+      "5": 2.00,
+      "-13": 1.75
+    },
+    "part_load_cop": {
+      "47": 4.30,
+      "17": 2.50,
+      "5": 2.20
+    },
+    "max_capacity_btu": {
+      "47": 20000,
+      "17": 14000,
+      "5": 20000,
+      "-13": 15000
+    }
+  }
+}

@@ -1,0 +1,75 @@
+"""
+hvac_crossover - Multi-Source HVAC Efficiency & Thermodynamic Crossover Optimizer
+Decoupled library for optimizing heat pumps, boilers, multi-split constraints, and micro-zoning.
+"""
+
+from .models import (
+    HvacMode,
+    HvacAction,
+    ProducerType,
+    EmitterType,
+    FuelType,
+    NetMeteringMode,
+    ThermalProfile,
+    SharedBoilerRole,
+    SystemPhase,
+    TariffSchedule,
+    Producer,
+    InverterHeatPumpProducer,
+    ModulatingBoilerProducer,
+    SteamBoilerProducer,
+    ProducerProfileFactory,
+    DeliveryUnit,
+    MiniSplitHead,
+    HydronicEmitter,
+    SmartRadiatorValve,
+    ComfortRange,
+    Space,
+    SpaceCondition,
+    SystemSnapshot,
+    SpaceDirective,
+    ProducerDirective,
+    Diagnostics,
+    DispatchPlan,
+    SystemTopology,
+)
+from .config import CoordinatorConfig
+from .coordinator import DualFuelCoordinator
+from .engines import EconomicsEngine, RecoveryEngine, ArbitratorEngine
+
+__version__ = "0.1.0"
+__all__ = [
+    "CoordinatorConfig",
+    "DualFuelCoordinator",
+    "EconomicsEngine",
+    "RecoveryEngine",
+    "ArbitratorEngine",
+    "HvacMode",
+    "HvacAction",
+    "ProducerType",
+    "EmitterType",
+    "FuelType",
+    "NetMeteringMode",
+    "ThermalProfile",
+    "SharedBoilerRole",
+    "SystemPhase",
+    "TariffSchedule",
+    "Producer",
+    "InverterHeatPumpProducer",
+    "ModulatingBoilerProducer",
+    "SteamBoilerProducer",
+    "ProducerProfileFactory",
+    "DeliveryUnit",
+    "MiniSplitHead",
+    "HydronicEmitter",
+    "SmartRadiatorValve",
+    "ComfortRange",
+    "Space",
+    "SpaceCondition",
+    "SystemSnapshot",
+    "SpaceDirective",
+    "ProducerDirective",
+    "Diagnostics",
+    "DispatchPlan",
+    "SystemTopology",
+]

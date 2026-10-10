@@ -1,0 +1,30 @@
+{
+  "make": "Mitsubishi Electric",
+  "series": "Multi-Zone Hyper-Heating (H2i)",
+  "model": "MXZ-3C30NAHZ2",
+  "vintage": 2019,
+  "producer_type": "inverter_heat_pump",
+  "refrigerant": "R410A",
+  "max_ports": 3,
+  "nominal_heating_btu": 30000,
+  "nominal_cooling_btu": 28400,
+  "heating_performance": {
+    "full_load_cop": {
+      "47": 3.90,
+      "17": 2.85,
+      "5": 2.45,
+      "-13": 1.95
+    },
+    "part_load_cop": {
+      "47": 4.25,
+      "17": 3.15,
+      "5": 2.65
+    },
+    "max_capacity_btu": {
+      "47": 28600,
+      "17": 21000,
+      "5": 28600,
+      "-13": 21400
+    }
+  }
+}
