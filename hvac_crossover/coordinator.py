@@ -88,15 +88,20 @@ class DualFuelCoordinator:
                 explanations.append(f"Space '{space.name}' delivery units turned OFF due to open window/skylight.")
                 continue
 
-            # Deadband / Uncontrolled Float Check
-            if cond.comfort.is_in_deadband(cond.current_temp):
-                candidate_space_modes[space.id] = HvacMode.OFF
-                candidate_emitters[space.id] = None
-                target_temps[space.id] = None
-                continue
+            demands_heat = False
+            demands_cool = False
+            if cond.comfort.demands_cool(cond.current_temp):
+                demands_cool = True
+            if cond.comfort.demands_heat(cond.current_temp):
+                demands_heat = True
+            if not demands_heat and not demands_cool:
+                # Let emitters' own thermostats control cycling. Use a
+                # reasonable mode depending on outdoor temperature.
+                demands_cool = cond.comfort.demands_cool(snapshot.outdoor_temp)
+                demands_heat = cond.comfort.demands_heat(snapshot.outdoor_temp)
 
             # Cooling Demand
-            if cond.comfort.demands_cool(cond.current_temp):
+            if demands_cool:
                 candidate_space_modes[space.id] = HvacMode.COOL
                 target_temps[space.id] = cond.comfort.cool_to
                 cooling_heads = [e for e in space.emitters if isinstance(e, MiniSplitHead)]
@@ -107,7 +112,7 @@ class DualFuelCoordinator:
                 continue
 
             # Heating Demand
-            if cond.comfort.demands_heat(cond.current_temp):
+            if demands_heat:
                 candidate_space_modes[space.id] = HvacMode.HEAT
                 target_temps[space.id] = cond.comfort.heat_to
 
