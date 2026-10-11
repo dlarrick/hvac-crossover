@@ -117,7 +117,7 @@ class TestDualFuelCoordinator(unittest.TestCase):
             }
         )
         self.assertEqual(plan.space_directives["loft"].action, HvacAction.PASSIVE_VENTILATION)
-        self.assertEqual(None, plan.space_directives["loft"].active_delivery_unit_ids)
+        self.assertEqual([], plan.space_directives["loft"].active_delivery_unit_ids)
 
 
 if __name__ == "__main__":
