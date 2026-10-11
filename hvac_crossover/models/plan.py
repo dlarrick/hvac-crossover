@@ -12,7 +12,7 @@ class SpaceDirective:
     action: HvacAction
     hvac_mode: HvacMode
     target_temp: Optional[float]
-    active_delivery_unit_id: Optional[str] = None
+    active_delivery_unit_ids: List[str] = field(default_factory=list)
     active_producer_id: Optional[str] = None
     explanation: str = ""
 
