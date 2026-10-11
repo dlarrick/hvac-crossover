@@ -65,7 +65,7 @@ class DualFuelCoordinator:
 
         # 3. Initial Space Demand Assessment
         candidate_space_modes: Dict[str, HvacMode] = {}
-        candidate_emitters: Dict[str, Optional[str]] = {}
+        candidate_emitters: Dict[str, List[str]] = {}
         target_temps: Dict[str, Optional[float]] = {}
         requested_boiler_zones: Set[Tuple[str, str]] = set()
 
@@ -76,14 +76,14 @@ class DualFuelCoordinator:
             cond = snapshot.spaces.get(space.id)
             if not cond:
                 candidate_space_modes[space.id] = HvacMode.OFF
-                candidate_emitters[space.id] = None
+                candidate_emitters[space.id] = []
                 target_temps[space.id] = None
                 continue
 
             # Check window interlocks for passive ventilation
             if cond.window_open and self.config.passive_ventilation_override:
                 candidate_space_modes[space.id] = HvacMode.OFF
-                candidate_emitters[space.id] = None
+                candidate_emitters[space.id] = []
                 target_temps[space.id] = None
                 explanations.append(f"Space '{space.name}' delivery units turned OFF due to open window/skylight.")
                 continue
@@ -105,10 +105,7 @@ class DualFuelCoordinator:
                 candidate_space_modes[space.id] = HvacMode.COOL
                 target_temps[space.id] = cond.comfort.cool_to
                 cooling_heads = [e for e in space.emitters if isinstance(e, MiniSplitHead)]
-                if cooling_heads:
-                    candidate_emitters[space.id] = cooling_heads[0].id
-                else:
-                    candidate_emitters[space.id] = None
+                candidate_emitters[space.id] = [e.id for e in cooling_heads]
                 continue
 
             # Heating Demand
@@ -129,14 +126,14 @@ class DualFuelCoordinator:
                 if in_recovery and hydronic_emitters and snapshot.outdoor_temp < 45.0:
                     # In deep recovery pull-up below 45°F, dispatch high-capacity boiler
                     selected = hydronic_emitters[0]
-                    candidate_emitters[space.id] = selected.id
+                    candidate_emitters[space.id] = [selected.id]
                     requested_boiler_zones.add((selected.producer_id, selected.zone_id))
                     explanations.append(
                         f"Space '{space.name}' in setback recovery (deficit {cond.comfort.heat_deficit(cond.current_temp):.1f}°F): "
                         f"dispatched high-capacity hydronic boiler for rapid pull-up."
                     )
                 else:
-                    # Steady-state plateau or mild weather: rank emitters economically
+                    # Steady-state: pick winning emitter type economically, then activate all of that type
                     ranked = self.economics.rank_space_emitters_by_cost(
                         space=space,
                         outdoor_temp_f=snapshot.outdoor_temp,
@@ -148,12 +145,17 @@ class DualFuelCoordinator:
                     )
                     if ranked:
                         best_emitter, best_cost, best_eff = ranked[0]
-                        candidate_emitters[space.id] = best_emitter.id
                         space_costs[space.id] = round(best_cost, 2)
                         space_cops[space.id] = round(best_eff, 2)
 
+                        # Activate all emitters of the same type as the winner
+                        winning_type = type(best_emitter)
+                        all_of_type = [e for e in space.emitters if type(e) == winning_type]
+                        candidate_emitters[space.id] = [e.id for e in all_of_type]
+
                         if isinstance(best_emitter, HydronicEmitter):
-                            requested_boiler_zones.add((best_emitter.producer_id, best_emitter.zone_id))
+                            for e in all_of_type:
+                                requested_boiler_zones.add((e.producer_id, e.zone_id))
 
         # 4. Multi-Split ODU Mode Conflict Arbitration
         if self.config.enforce_odu_mode_locks:
@@ -178,13 +180,13 @@ class DualFuelCoordinator:
         for space in self.topology.spaces:
             cond = snapshot.spaces.get(space.id)
             final_mode = resolved_modes.get(space.id, HvacMode.OFF)
-            emitter_id = candidate_emitters.get(space.id)
+            emitter_ids = candidate_emitters.get(space.id, [])
             target = target_temps.get(space.id)
 
             if cond and cond.window_open and self.config.passive_ventilation_override:
                 action = HvacAction.PASSIVE_VENTILATION
                 final_mode = HvacMode.OFF
-                emitter_id = None
+                emitter_ids = []
             elif final_mode == HvacMode.HEAT:
                 action = HvacAction.HEATING
             elif final_mode in (HvacMode.COOL, HvacMode.DRY):
@@ -192,19 +194,19 @@ class DualFuelCoordinator:
             else:
                 action = HvacAction.IDLE if cond and cond.comfort.is_in_deadband(cond.current_temp) else HvacAction.OFF
 
+            # Resolve primary producer from first active emitter
             active_producer_id = None
-            if emitter_id:
-                for e in space.emitters:
-                    if e.id == emitter_id:
-                        active_producer_id = e.producer_id
-                        break
+            for e in space.emitters:
+                if e.id in emitter_ids:
+                    active_producer_id = e.producer_id
+                    break
 
             space_directives[space.id] = SpaceDirective(
                 space_id=space.id,
                 action=action,
                 hvac_mode=final_mode,
                 target_temp=target,
-                active_delivery_unit_id=emitter_id,
+                active_delivery_unit_ids=emitter_ids,
                 active_producer_id=active_producer_id,
                 explanation=f"Mode: {final_mode.value}, Action: {action.value}"
             )
