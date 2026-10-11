@@ -83,7 +83,7 @@ class TestDualFuelCoordinator(unittest.TestCase):
         self.assertIn("z1", plan.producer_directives["alta150"].active_zones)
         self.assertIn("z2", plan.producer_directives["alta150"].active_zones)
         self.assertIn("z3", plan.producer_directives["alta150"].active_zones)
-        self.assertEqual(plan.space_directives["primary_br"].active_delivery_unit_id, "master_baseboard")
+        self.assertEqual(plan.space_directives["primary_br"].active_delivery_unit_ids, ["master_baseboard"])
 
     def test_warm_plateau_dispatches_heat_pumps(self):
         # 46°F outdoor (>41.4°F crossover), small deficit (<= 1.0°F)
@@ -101,7 +101,7 @@ class TestDualFuelCoordinator(unittest.TestCase):
         # Boiler rests
         self.assertEqual(len(plan.producer_directives["alta150"].active_zones), 0)
         # Primary bedroom uses mini-split head at high COP
-        self.assertEqual(plan.space_directives["primary_br"].active_delivery_unit_id, "master_head")
+        self.assertEqual(plan.space_directives["primary_br"].active_delivery_unit_ids, ["master_head"])
         self.assertEqual(plan.producer_directives["odu1"].operational_mode, HvacMode.HEAT)
 
     def test_passive_ventilation_shuts_off_space(self):
@@ -117,7 +117,7 @@ class TestDualFuelCoordinator(unittest.TestCase):
             }
         )
         self.assertEqual(plan.space_directives["loft"].action, HvacAction.PASSIVE_VENTILATION)
-        self.assertIsNone(plan.space_directives["loft"].active_delivery_unit_id)
+        self.assertEqual(None, plan.space_directives["loft"].active_delivery_unit_ids)
 
 
 if __name__ == "__main__":
