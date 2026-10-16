@@ -1,0 +1,22 @@
+{
+  "make": "Haier",
+  "model": "3U24MS2VHB",
+  "producer_type": "inverter_heat_pump",
+  "refrigerant": "R410A",
+  "nominal_heating_btu": "24000",
+  "nominal_cooling_btu": "24000",
+  "heating_performance": {
+    "full_load_cop": {
+      "47": 10.89,
+      "17": 8.99,
+      "5": 7.87,
+      "-4": 6.89
+    }
+  },
+  "max_capacity_btu": {
+    "47": 25600,
+    "17": 17720,
+    "5": 14960,
+    "-4": 13500
+  }
+}

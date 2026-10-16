@@ -1,17 +1,18 @@
 """Main DualFuelCoordinator facade and central evaluation pipeline."""
 
-from typing import Dict, Any, Optional, List, Set, Tuple
-from .models.enums import HvacMode, HvacAction, SystemPhase, ProducerType
-from .models.topology import SystemTopology
-from .models.tariffs import TariffSchedule
-from .models.snapshot import SystemSnapshot
-from .models.spaces import SpaceCondition, ComfortRange
-from .models.delivery import MiniSplitHead, HydronicEmitter
-from .models.plan import DispatchPlan, SpaceDirective, ProducerDirective, Diagnostics
+from typing import Any
+
 from .config import CoordinatorConfig
+from .engines.arbitrator import ArbitratorEngine
 from .engines.economics import EconomicsEngine
 from .engines.recovery import RecoveryEngine
-from .engines.arbitrator import ArbitratorEngine
+from .models.delivery import HydronicEmitter, MiniSplitHead
+from .models.enums import HvacAction, HvacMode, ProducerType
+from .models.plan import Diagnostics, DispatchPlan, ProducerDirective, SpaceDirective
+from .models.snapshot import SystemSnapshot
+from .models.spaces import ComfortRange, SpaceCondition
+from .models.tariffs import TariffSchedule
+from .models.topology import SystemTopology
 
 
 class DualFuelCoordinator:
@@ -24,7 +25,7 @@ class DualFuelCoordinator:
     def __init__(
         self,
         topology: SystemTopology,
-        config: Optional[CoordinatorConfig] = None,
+        config: CoordinatorConfig | None = None,
     ):
         self.topology = topology
         self.config = config or CoordinatorConfig()
@@ -36,17 +37,23 @@ class DualFuelCoordinator:
         """
         Evaluates the ground-truth snapshot and generates a DispatchPlan.
         """
-        space_directives: Dict[str, SpaceDirective] = {}
-        producer_directives: Dict[str, ProducerDirective] = {}
-        explanations: List[str] = []
+        space_directives: dict[str, SpaceDirective] = {}
+        producer_directives: dict[str, ProducerDirective] = {}
+        explanations: list[str] = []
 
         # 1. Determine Macro System Phase
         system_phase = self.recovery.determine_system_phase(snapshot.spaces, self.topology)
 
         # 2. Find primary boiler for crossover calculations
         boiler_producers = [
-            p for p in self.topology.producers
-            if p.producer_type in (ProducerType.MODULATING_BOILER, ProducerType.ATMOSPHERIC_BOILER, ProducerType.STEAM_BOILER)
+            p
+            for p in self.topology.producers
+            if p.producer_type
+            in (
+                ProducerType.MODULATING_BOILER,
+                ProducerType.ATMOSPHERIC_BOILER,
+                ProducerType.STEAM_BOILER,
+            )
         ]
         primary_boiler = boiler_producers[0] if boiler_producers else None
 
@@ -64,13 +71,13 @@ class DualFuelCoordinator:
                 crossover_temp = t_cross
 
         # 3. Initial Space Demand Assessment
-        candidate_space_modes: Dict[str, HvacMode] = {}
-        candidate_emitters: Dict[str, List[str]] = {}
-        target_temps: Dict[str, Optional[float]] = {}
-        requested_boiler_zones: Set[Tuple[str, str]] = set()
+        candidate_space_modes: dict[str, HvacMode] = {}
+        candidate_emitters: dict[str, list[str]] = {}
+        target_temps: dict[str, float | None] = {}
+        requested_boiler_zones: set[tuple[str, str]] = set()
 
-        space_costs: Dict[str, float] = {}
-        space_cops: Dict[str, float] = {}
+        space_costs: dict[str, float] = {}
+        space_cops: dict[str, float] = {}
 
         for space in self.topology.spaces:
             cond = snapshot.spaces.get(space.id)
@@ -121,7 +128,6 @@ class DualFuelCoordinator:
 
                 # Find available hydronic emitter
                 hydronic_emitters = [e for e in space.emitters if isinstance(e, HydronicEmitter)]
-                mini_split_heads = [e for e in space.emitters if isinstance(e, MiniSplitHead)]
 
                 if in_recovery and hydronic_emitters and snapshot.outdoor_temp < 45.0:
                     # In deep recovery pull-up below 45°F, dispatch high-capacity boiler
@@ -129,7 +135,8 @@ class DualFuelCoordinator:
                     candidate_emitters[space.id] = [selected.id]
                     requested_boiler_zones.add((selected.producer_id, selected.zone_id))
                     explanations.append(
-                        f"Space '{space.name}' in setback recovery (deficit {cond.comfort.heat_deficit(cond.current_temp):.1f}°F): "
+                        f"Space '{space.name}' in setback recovery "
+                        f"(deficit {cond.comfort.heat_deficit(cond.current_temp):.1f}°F): "
                         f"dispatched high-capacity hydronic boiler for rapid pull-up."
                     )
                 else:
@@ -150,7 +157,7 @@ class DualFuelCoordinator:
 
                         # Activate all emitters of the same type as the winner
                         winning_type = type(best_emitter)
-                        all_of_type = [e for e in space.emitters if type(e) == winning_type]
+                        all_of_type = [e for e in space.emitters if isinstance(e, winning_type)]
                         candidate_emitters[space.id] = [e.id for e in all_of_type]
 
                         if isinstance(best_emitter, HydronicEmitter):
@@ -159,10 +166,17 @@ class DualFuelCoordinator:
 
         # 4. Multi-Split ODU Mode Conflict Arbitration
         if self.config.enforce_odu_mode_locks:
-            resolved_modes, odu_explanations = self.arbitrator.arbitrate_odu_modes(
+            (
+                resolved_modes,
+                candidate_emitters,
+                requested_boiler_zones,
+                odu_explanations,
+            ) = self.arbitrator.arbitrate_odu_modes(
                 requested_space_modes=candidate_space_modes,
                 topology=self.topology,
                 space_conditions=snapshot.spaces,
+                candidate_emitters=candidate_emitters,
+                requested_boiler_zones=requested_boiler_zones,
             )
             explanations.extend(odu_explanations)
         else:
@@ -208,19 +222,27 @@ class DualFuelCoordinator:
                 target_temp=target,
                 active_delivery_unit_ids=emitter_ids,
                 active_producer_id=active_producer_id,
-                explanation=f"Mode: {final_mode.value}, Action: {action.value}"
+                explanation=f"Mode: {final_mode.value}, Action: {action.value}",
             )
 
         # 7. Build Producer Directives
-        odu_operational_modes: Dict[str, str] = {}
+        odu_operational_modes: dict[str, str] = {}
         for producer in self.topology.producers:
             if producer.producer_type == ProducerType.INVERTER_HEAT_PUMP:
                 # Find mode of active heads on this ODU
-                active_modes = [
-                    space_directives[s.id].hvac_mode
-                    for s in self.topology.get_spaces_for_producer(producer.id)
-                    if s.id in space_directives and space_directives[s.id].active_producer_id == producer.id
-                ]
+                active_modes = []
+                for s in self.topology.get_spaces_for_producer(producer.id):
+                    s_dir = space_directives.get(s.id)
+                    if not s_dir or s_dir.hvac_mode == HvacMode.OFF:
+                        continue
+                    has_active_head = any(
+                        e.id in s_dir.active_delivery_unit_ids
+                        for e in s.emitters
+                        if isinstance(e, MiniSplitHead) and e.producer_id == producer.id
+                    )
+                    if has_active_head:
+                        active_modes.append(s_dir.hvac_mode)
+
                 active_modes = [m for m in active_modes if m != HvacMode.OFF]
                 odu_mode = active_modes[0] if active_modes else HvacMode.OFF
                 is_active = odu_mode != HvacMode.OFF
@@ -233,10 +255,7 @@ class DualFuelCoordinator:
                 )
             else:
                 # Boiler / Furnace producer
-                active_zones = [
-                    zone_id for b_id, zone_id in approved_boiler_zones
-                    if b_id == producer.id
-                ]
+                active_zones = [zone_id for b_id, zone_id in approved_boiler_zones if b_id == producer.id]
                 is_active = len(active_zones) > 0
                 producer_directives[producer.id] = ProducerDirective(
                     producer_id=producer.id,
@@ -265,16 +284,16 @@ class DualFuelCoordinator:
         self,
         outdoor_temp: float,
         tariffs: TariffSchedule,
-        spaces: Dict[str, Dict[str, Any]],
+        spaces: dict[str, dict[str, Any]],
         solar_export_watts: float = 0.0,
-        boiler_return_temp: Optional[float] = None,
-        elec_rate_override: Optional[float] = None,
-        current_hour: Optional[int] = None,
+        boiler_return_temp: float | None = None,
+        elec_rate_override: float | None = None,
+        current_hour: int | None = None,
     ) -> DispatchPlan:
         """
         Convenience keyword-argument evaluation method that constructs a SystemSnapshot internally.
         """
-        space_conditions: Dict[str, SpaceCondition] = {}
+        space_conditions: dict[str, SpaceCondition] = {}
         for s_id, s_data in spaces.items():
             current_temp = float(s_data["current"])
             comfort = ComfortRange(

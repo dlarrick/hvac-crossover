@@ -1,10 +1,9 @@
 """Thermal state and setback recovery evaluation engine."""
 
-from typing import Dict, Tuple
+from ..config import CoordinatorConfig
 from ..models.enums import SystemPhase
 from ..models.spaces import Space, SpaceCondition
 from ..models.topology import SystemTopology
-from ..config import CoordinatorConfig
 
 
 class RecoveryEngine:
@@ -51,16 +50,13 @@ class RecoveryEngine:
 
     def determine_system_phase(
         self,
-        spaces: Dict[str, SpaceCondition],
+        spaces: dict[str, SpaceCondition],
         topology: SystemTopology,
     ) -> SystemPhase:
         """
         Determines the dominant macro-system phase across all spaces.
         """
-        active_occupied = [
-            (s_id, cond) for s_id, cond in spaces.items()
-            if cond.occupied and not cond.window_open
-        ]
+        active_occupied = [(s_id, cond) for s_id, cond in spaces.items() if cond.occupied and not cond.window_open]
 
         if not active_occupied:
             # Check if passive ventilation is active anywhere

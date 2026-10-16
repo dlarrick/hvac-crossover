@@ -1,11 +1,11 @@
 """Unit tests for ComfortRange deadband, deficits, and open-ended floating."""
 
 import unittest
+
 from hvac_crossover.models.spaces import ComfortRange
 
 
 class TestComfortRange(unittest.TestCase):
-
     def test_standard_deadband(self):
         # 68°F to 72°F comfort band
         comfort = ComfortRange(heat_to=68.0, cool_to=72.0)

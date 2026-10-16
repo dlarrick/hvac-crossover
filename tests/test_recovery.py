@@ -1,15 +1,15 @@
 """Unit tests for RecoveryEngine and thermal mass calculations."""
 
 import unittest
+
 from hvac_crossover.config import CoordinatorConfig
-from hvac_crossover.models.enums import SystemPhase, ThermalProfile
-from hvac_crossover.models.spaces import Space, SpaceCondition, ComfortRange
-from hvac_crossover.models.topology import SystemTopology
 from hvac_crossover.engines.recovery import RecoveryEngine
+from hvac_crossover.models.enums import SystemPhase, ThermalProfile
+from hvac_crossover.models.spaces import ComfortRange, Space, SpaceCondition
+from hvac_crossover.models.topology import SystemTopology
 
 
 class TestRecoveryEngine(unittest.TestCase):
-
     def setUp(self):
         self.config = CoordinatorConfig(
             recovery_delta_threshold_f=3.0,
@@ -54,23 +54,17 @@ class TestRecoveryEngine(unittest.TestCase):
         topology = SystemTopology(spaces=[self.space])
 
         # Active recovery in occupied space
-        spaces_recovery = {
-            "primary_br": SpaceCondition(current_temp=63.0, comfort=comfort, occupied=True)
-        }
+        spaces_recovery = {"primary_br": SpaceCondition(current_temp=63.0, comfort=comfort, occupied=True)}
         phase1 = self.recovery.determine_system_phase(spaces_recovery, topology)
         self.assertEqual(phase1, SystemPhase.SETBACK_RECOVERY)
 
         # Plateau maintenance
-        spaces_plateau = {
-            "primary_br": SpaceCondition(current_temp=67.5, comfort=comfort, occupied=True)
-        }
+        spaces_plateau = {"primary_br": SpaceCondition(current_temp=67.5, comfort=comfort, occupied=True)}
         phase2 = self.recovery.determine_system_phase(spaces_plateau, topology)
         self.assertEqual(phase2, SystemPhase.PLATEAU_MAINTENANCE)
 
         # Passive ventilation
-        spaces_vent = {
-            "primary_br": SpaceCondition(current_temp=68.0, comfort=comfort, window_open=True)
-        }
+        spaces_vent = {"primary_br": SpaceCondition(current_temp=68.0, comfort=comfort, window_open=True)}
         phase3 = self.recovery.determine_system_phase(spaces_vent, topology)
         self.assertEqual(phase3, SystemPhase.PASSIVE_VENTILATION)
 

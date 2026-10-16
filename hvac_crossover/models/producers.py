@@ -1,14 +1,15 @@
 """Equipment producer models (Heat pumps, Mod-Con boilers, Steam boilers)."""
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
 import json
 import os
-from typing import Dict, Any, Optional
-from .enums import ProducerType, FuelType
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from typing import Any
+
+from .enums import FuelType, ProducerType
 
 
-def interpolate_points(points: Dict[float, float], x: float) -> float:
+def interpolate_points(points: dict[float, float], x: float) -> float:
     """Linearly interpolate or flat-extrapolate between given x->y points."""
     if not points:
         return 0.0
@@ -33,6 +34,7 @@ def interpolate_points(points: Dict[float, float], x: float) -> float:
 @dataclass
 class Producer(ABC):
     """Abstract base class for all energy conversion producers."""
+
     id: str
     name: str
     producer_type: ProducerType
@@ -44,8 +46,8 @@ class Producer(ABC):
         self,
         outdoor_temp_f: float,
         tariffs: Any,
-        load_btu: Optional[float] = None,
-        telemetry: Optional[Dict[str, Any]] = None,
+        load_btu: float | None = None,
+        telemetry: dict[str, Any] | None = None,
         part_load: bool = False,
     ) -> float:
         """Returns the cost per 1,000,000 BTU of delivered heat under given conditions."""
@@ -58,12 +60,13 @@ class InverterHeatPumpProducer(Producer):
     Multi-split inverter heat pump outdoor unit (ODU).
     Enforces single-refrigerant mode lock and multi-point COP/capacity interpolation.
     """
+
     producer_type: ProducerType = field(default=ProducerType.INVERTER_HEAT_PUMP, init=False)
     fuel_type: FuelType = field(default=FuelType.ELECTRICITY, init=False)
 
-    cop_curve_full_load: Dict[float, float] = field(default_factory=dict)
-    cop_curve_part_load: Optional[Dict[float, float]] = None
-    capacity_curve_btu: Dict[float, float] = field(default_factory=dict)
+    cop_curve_full_load: dict[float, float] = field(default_factory=dict)
+    cop_curve_part_load: dict[float, float] | None = None
+    capacity_curve_btu: dict[float, float] = field(default_factory=dict)
 
     refrigerant: str = "R410A"
     max_ports: int = 3
@@ -85,27 +88,27 @@ class InverterHeatPumpProducer(Producer):
         self,
         outdoor_temp_f: float,
         tariffs: Any,
-        load_btu: Optional[float] = None,
-        telemetry: Optional[Dict[str, Any]] = None,
+        load_btu: float | None = None,
+        telemetry: dict[str, Any] | None = None,
         part_load: bool = False,
     ) -> float:
         cop = self.cop_at(outdoor_temp_f, part_load=part_load)
         if cop <= 0:
             return float("inf")
-        elec_cost = tariffs.marginal_electric_cost(
-            telemetry.get("solar_export_watts", 0.0) if telemetry else 0.0
-        )
+        elec_cost = tariffs.marginal_electric_cost(telemetry.get("solar_export_watts", 0.0) if telemetry else 0.0)
         return elec_cost / (cop * 0.0034121416)
 
 
 @dataclass
 class ModulatingBoilerProducer(Producer):
     """
-    Modulating-condensing (Mod-Con) gas hydronic boiler (e.g. Burnham Alta 150).
-    Features turndown limits, short-cycling penalty modeling, and condensing dew-point physics.
+    Modulating-condensing (Mod-Con) hydronic boiler (e.g. Burnham Alta 150).
+    Supports Natural Gas and Propane (LP) with physics-based condensing dew-point curves,
+    turndown limits, and short-cycling penalty modeling.
     """
+
     producer_type: ProducerType = field(default=ProducerType.MODULATING_BOILER, init=False)
-    fuel_type: FuelType = field(default=FuelType.NATURAL_GAS, init=False)
+    fuel_type: FuelType = FuelType.NATURAL_GAS
 
     rated_afue: float = 0.95
     min_fire_btu: float = 20000.0
@@ -114,26 +117,41 @@ class ModulatingBoilerProducer(Producer):
 
     def efficiency_at(
         self,
-        load_btu: Optional[float] = None,
-        return_water_temp_f: Optional[float] = None,
+        load_btu: float | None = None,
+        return_water_temp_f: float | None = None,
     ) -> float:
         """
         Determines the in-situ thermal efficiency accounting for:
-        1. Measured return water temperature dew-point condensation curve (if thermistor available).
+        1. Measured return water temperature dew-point condensation curve (fuel-specific).
+           - Natural Gas flue gas dew point is ~130-135°F.
+           - Propane flue gas dew point is ~120-122°F (~8-10°F colder return required to condense).
         2. Burner short-cycling degradation when load < min_fire_btu.
         """
         base_eff = self.rated_afue
 
         # 1. Physical condensing dew-point curve lookup if telemetry exists
         if return_water_temp_f is not None:
-            if return_water_temp_f > 135.0:
-                base_eff = 0.865  # Strictly non-condensing dry heat exchanger
-            elif return_water_temp_f > 120.0:
-                base_eff = 0.890  # Weak condensation
-            elif return_water_temp_f > 105.0:
-                base_eff = 0.935  # Active condensation
+            if self.fuel_type == FuelType.PROPANE:
+                # Propane dew point is ~120-122°F (~8-10°F lower than natural gas).
+                # Peak latent heat gain is also slightly lower (~2% lower max efficiency).
+                if return_water_temp_f > 125.0:
+                    base_eff = 0.860  # Strictly non-condensing dry heat exchanger
+                elif return_water_temp_f > 112.0:
+                    base_eff = 0.880  # Weak condensation onset
+                elif return_water_temp_f > 98.0:
+                    base_eff = 0.915  # Active condensation
+                else:
+                    base_eff = 0.940  # Deep sub-100°F condensation
             else:
-                base_eff = 0.965  # Deep sub-100°F condensation (cold recovery pull-up)
+                # Natural gas dew point is ~130-135°F
+                if return_water_temp_f > 135.0:
+                    base_eff = 0.865  # Strictly non-condensing dry heat exchanger
+                elif return_water_temp_f > 120.0:
+                    base_eff = 0.890  # Weak condensation onset
+                elif return_water_temp_f > 105.0:
+                    base_eff = 0.935  # Active condensation
+                else:
+                    base_eff = 0.965  # Deep sub-100°F condensation (cold recovery pull-up)
 
         # 2. Burner modulation & short-cycling penalty
         if load_btu is not None and load_btu < self.min_fire_btu and self.min_fire_btu > 0:
@@ -148,13 +166,19 @@ class ModulatingBoilerProducer(Producer):
         self,
         outdoor_temp_f: float,
         tariffs: Any,
-        load_btu: Optional[float] = None,
-        telemetry: Optional[Dict[str, Any]] = None,
+        load_btu: float | None = None,
+        telemetry: dict[str, Any] | None = None,
         part_load: bool = False,
     ) -> float:
         return_temp = telemetry.get("boiler_return_temp") if telemetry else None
         eff = self.efficiency_at(load_btu=load_btu, return_water_temp_f=return_temp)
-        return (tariffs.gas_cost_per_therm / (eff * 0.100))
+
+        if self.fuel_type == FuelType.PROPANE:
+            # 1 gallon of HD-5 propane = ~91,500 BTU = 0.0915 MMBtu
+            fuel_cost_per_mmbtu = tariffs.propane_cost_per_gal / 0.0915 if tariffs.propane_cost_per_gal > 0 else 0.0
+            return fuel_cost_per_mmbtu / eff if eff > 0 else 0.0
+
+        return tariffs.gas_cost_per_therm / (eff * 0.100)
 
 
 @dataclass
@@ -163,6 +187,7 @@ class SteamBoilerProducer(Producer):
     Atmospheric steam boiler common in historic New England homes.
     Fixed non-condensing efficiency with an enforced minimum run time lock to prevent short-cycling.
     """
+
     producer_type: ProducerType = field(default=ProducerType.STEAM_BOILER, init=False)
     fuel_type: FuelType = field(default=FuelType.NATURAL_GAS, init=False)
 
@@ -173,8 +198,8 @@ class SteamBoilerProducer(Producer):
         self,
         outdoor_temp_f: float,
         tariffs: Any,
-        load_btu: Optional[float] = None,
-        telemetry: Optional[Dict[str, Any]] = None,
+        load_btu: float | None = None,
+        telemetry: dict[str, Any] | None = None,
         part_load: bool = False,
     ) -> float:
         return tariffs.gas_cost_per_therm / (self.rated_afue * 0.100)
@@ -184,7 +209,12 @@ class ProducerProfileFactory:
     """Loads pre-seeded equipment models from the profiles/ library."""
 
     @staticmethod
-    def load_from_json(file_path: str, producer_id: str, name: Optional[str] = None) -> Producer:
+    def load_from_json(
+        file_path: str,
+        producer_id: str,
+        name: str | None = None,
+        fuel_type: FuelType | None = None,
+    ) -> Producer:
         if not os.path.exists(file_path):
             pkg_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
             candidate = os.path.join(pkg_dir, "profiles", "producers", file_path)
@@ -193,9 +223,8 @@ class ProducerProfileFactory:
             elif os.path.exists(os.path.join(pkg_dir, file_path)):
                 file_path = os.path.join(pkg_dir, file_path)
 
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             data = json.load(f)
-
 
         p_type = data.get("producer_type", "inverter_heat_pump")
         nominal = float(data.get("nominal_heating_btu", data.get("nominal_btu", 30000)))
@@ -204,7 +233,11 @@ class ProducerProfileFactory:
         if p_type == "inverter_heat_pump":
             perf = data.get("heating_performance", {})
             full_cop = {float(k): float(v) for k, v in perf.get("full_load_cop", {}).items()}
-            part_cop = {float(k): float(v) for k, v in perf.get("part_load_cop", {}).items()} if "part_load_cop" in perf else None
+            part_cop = (
+                {float(k): float(v) for k, v in perf.get("part_load_cop", {}).items()}
+                if "part_load_cop" in perf
+                else None
+            )
             cap_curve = {float(k): float(v) for k, v in perf.get("max_capacity_btu", {}).items()}
 
             return InverterHeatPumpProducer(
@@ -219,10 +252,16 @@ class ProducerProfileFactory:
             )
 
         if p_type == "modulating_boiler":
+            resolved_fuel = fuel_type
+            if resolved_fuel is None:
+                fuel_str = str(data.get("fuel_type", "natural_gas")).lower()
+                resolved_fuel = FuelType.PROPANE if fuel_str in ("propane", "lp") else FuelType.NATURAL_GAS
+
             return ModulatingBoilerProducer(
                 id=producer_id,
                 name=disp_name,
                 nominal_btu=nominal,
+                fuel_type=resolved_fuel,
                 rated_afue=float(data.get("rated_afue", 0.95)),
                 min_fire_btu=float(data.get("min_fire_btu", 20000)),
                 turndown_ratio=float(data.get("turndown_ratio", 7.5)),

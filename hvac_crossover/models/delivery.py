@@ -1,13 +1,15 @@
 """Terminal delivery units (Mini-split heads, baseboard loops, radiators, TRVs)."""
 
 from abc import ABC
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+
 from .enums import EmitterType
 
 
 @dataclass(kw_only=True)
 class DeliveryUnit(ABC):
     """Abstract base class for heat/cool delivery hardware in a room."""
+
     id: str
     name: str = ""
     emitter_type: EmitterType
@@ -20,6 +22,7 @@ class MiniSplitHead(DeliveryUnit):
     Ductless indoor head (wall, cassette, floor) or ducted air handler.
     Connected to a specific Inverter Heat Pump ODU.
     """
+
     emitter_type: EmitterType = EmitterType.DUCTLESS_HEAD
     nominal_btu: float = 12000.0
     unconditioned_line_length_ft: float = 0.0
@@ -46,6 +49,7 @@ class HydronicEmitter(DeliveryUnit):
     Hydronic water loop emitter (fin-tube baseboard, cast-iron radiator, in-floor radiant).
     Connected to a central boiler producer via a shared or dedicated zone valve.
     """
+
     emitter_type: EmitterType = EmitterType.FIN_TUBE_BASEBOARD
     zone_id: str = "z1"
     design_water_temp_f: float = 180.0
@@ -56,6 +60,7 @@ class SmartRadiatorValve(DeliveryUnit):
     """
     Individual Thermostatic Radiator Valve (TRV) providing 1:1 micro-zoning.
     """
+
     emitter_type: EmitterType = EmitterType.TRV
     zone_id: str = "z1"
     valve_id: str = "trv_1"
