@@ -38,3 +38,23 @@ include = ["hvac_crossover*"]
 
 [tool.setuptools.package-data]
 hvac_crossover = ["profiles/producers/**/*.json"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.coverage.run]
+source = ["hvac_crossover"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false

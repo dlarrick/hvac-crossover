@@ -1,12 +1,11 @@
 """Refrigerant mode safety and shared-zone arbitration engine."""
 
-from typing import Dict, List, Set, Tuple, Optional
-from ..models.enums import HvacMode, HvacAction, SharedBoilerRole
+from ..config import CoordinatorConfig
+from ..models.delivery import HydronicEmitter, MiniSplitHead
+from ..models.enums import HvacMode, SharedBoilerRole
 from ..models.producers import InverterHeatPumpProducer
-from ..models.delivery import DeliveryUnit, MiniSplitHead, HydronicEmitter
 from ..models.spaces import Space, SpaceCondition
 from ..models.topology import SystemTopology
-from ..config import CoordinatorConfig
 
 
 class ArbitratorEngine:
@@ -22,101 +21,212 @@ class ArbitratorEngine:
 
     def arbitrate_odu_modes(
         self,
-        requested_space_modes: Dict[str, HvacMode],
+        requested_space_modes: dict[str, HvacMode],
         topology: SystemTopology,
-        space_conditions: Dict[str, SpaceCondition],
-    ) -> Tuple[Dict[str, HvacMode], List[str]]:
+        space_conditions: dict[str, SpaceCondition],
+        candidate_emitters: dict[str, list[str]] | None = None,
+        requested_boiler_zones: set[tuple[str, str]] | None = None,
+    ):
         """
         Ensures all heads on each ODU operate in a compatible refrigerant mode.
         If a conflict occurs (e.g. Head A wants COOL, Head B wants HEAT on same ODU):
         - If the ODU supports simultaneous heat/cool (VRF Heat Recovery), allow both.
-        - Otherwise, checks if the heating head can be diverted to an alternate producer (boiler).
-        - If no alternate exists, highest priority Space wins; lower priority is idled.
-        Returns: (resolved_space_modes, explanation_messages)
+        - If one side is only in deadband float while the other has active demand, deadband yields.
+        - If heating spaces have alternative emitters (other ODUs), conflicting head yields.
+        - If heating space has mild deficit (< recovery threshold), avoid boiler fallback; head yields.
+        - If heating space is in recovery (>= recovery threshold) with hydronic fallback, divert to boiler.
+        - If no alternate exists and in recovery, highest priority Space wins.
+        Returns:
+            If candidate_emitters is None: (resolved_modes, explanations)
+            Else: (resolved_modes, resolved_emitters, resolved_boiler_zones, explanations)
         """
         resolved_modes = dict(requested_space_modes)
+        resolved_emitters = (
+            {k: list(v) for k, v in candidate_emitters.items()} if candidate_emitters is not None else None
+        )
+        resolved_boiler_zones = set(requested_boiler_zones) if requested_boiler_zones is not None else set()
         explanations = []
 
-        # Find all inverter heat pump producers
         odus = [p for p in topology.producers if isinstance(p, InverterHeatPumpProducer)]
 
         for odu in odus:
             if odu.supports_simultaneous_heat_cool:
                 continue  # VRF Heat Recovery relaxes the single-mode lock
 
-            # Find all spaces that have a mini-split head on this ODU
-            odu_spaces: List[Tuple[Space, MiniSplitHead]] = []
+            # Collect active requested heads on this ODU
+            heating_heads: list[tuple[Space, MiniSplitHead]] = []
+            cooling_heads: list[tuple[Space, MiniSplitHead]] = []
+
             for s in topology.spaces:
-                for d in s.emitters:
-                    if isinstance(d, MiniSplitHead) and d.producer_id == odu.id:
-                        odu_spaces.append((s, d))
-                        break
-
-            # Collect active requested modes (ignore OFF/IDLE)
-            active_modes: Dict[str, List[Tuple[Space, MiniSplitHead]]] = {"heat": [], "cool": [], "dry": []}
-            for s, head in odu_spaces:
                 mode = resolved_modes.get(s.id, HvacMode.OFF)
-                if mode in (HvacMode.HEAT, HvacMode.COOL, HvacMode.DRY):
-                    active_modes[mode.value].append((s, head))
+                if mode == HvacMode.OFF:
+                    continue
 
-            active_mode_keys = [k for k, v in active_modes.items() if v]
+                for d in s.emitters:
+                    if not (isinstance(d, MiniSplitHead) and d.producer_id == odu.id):
+                        continue
 
-            # Conflict: both HEAT and COOL (or DRY) requested on the same ODU!
-            if "heat" in active_mode_keys and ("cool" in active_mode_keys or "dry" in active_mode_keys):
-                cooling_spaces = active_modes["cool"] + active_modes["dry"]
-                heating_spaces = active_modes["heat"]
+                    # If candidate_emitters was provided, only consider heads currently candidate
+                    if resolved_emitters is not None and d.id not in resolved_emitters.get(s.id, []):
+                        continue
 
-                # Check if heating spaces can be cleanly diverted to an alternate hydronic emitter
-                diverted_all_heaters = True
-                diverted_spaces = []
+                    if mode == HvacMode.HEAT:
+                        heating_heads.append((s, d))
+                    elif mode in (HvacMode.COOL, HvacMode.DRY):
+                        cooling_heads.append((s, d))
 
-                for s, head in heating_spaces:
-                    has_hydronic_alt = any(
-                        isinstance(e, HydronicEmitter) for e in s.emitters
-                    )
-                    if has_hydronic_alt:
-                        diverted_spaces.append(s)
+            if not heating_heads or not cooling_heads:
+                continue  # No conflict on this ODU
+
+            # Conflict detected!
+            def is_in_deadband(sp: Space) -> bool:
+                c = space_conditions.get(sp.id)
+                return c.comfort.is_in_deadband(c.current_temp) if c else False
+
+            def get_heat_deficit(sp: Space) -> float:
+                c = space_conditions.get(sp.id)
+                return c.comfort.heat_deficit(c.current_temp) if c else 0.0
+
+            all_heaters_in_deadband = all(is_in_deadband(s) for s, _ in heating_heads)
+            any_cooler_active = any(not is_in_deadband(s) for s, _ in cooling_heads)
+
+            all_coolers_in_deadband = all(is_in_deadband(s) for s, _ in cooling_heads)
+            any_heater_active = any(not is_in_deadband(s) for s, _ in heating_heads)
+
+            if all_heaters_in_deadband and any_cooler_active:
+                # Cooling wins ODU; heating heads yield because they are in deadband float
+                for s, head in heating_heads:
+                    if resolved_emitters is not None:
+                        if head.id in resolved_emitters.get(s.id, []):
+                            resolved_emitters[s.id].remove(head.id)
+                        if not resolved_emitters[s.id]:
+                            resolved_modes[s.id] = HvacMode.OFF
                     else:
-                        diverted_all_heaters = False
-                        break
+                        resolved_modes[s.id] = HvacMode.OFF
+                    explanations.append(
+                        f"ODU Mode Conflict on '{odu.id}': Head '{head.id}' in Space '{s.name}' turned OFF "
+                        f"(space in deadband float) to allow cooling on active space(s)."
+                    )
+                continue
 
-                if diverted_all_heaters:
-                    # Successfully resolved conflict by diverting heat to boiler!
-                    for s in diverted_spaces:
+            if all_coolers_in_deadband and any_heater_active:
+                # Heating wins ODU; cooling heads yield because they are in deadband float
+                for s, head in cooling_heads:
+                    if resolved_emitters is not None:
+                        if head.id in resolved_emitters.get(s.id, []):
+                            resolved_emitters[s.id].remove(head.id)
+                        if not resolved_emitters[s.id]:
+                            resolved_modes[s.id] = HvacMode.OFF
+                    else:
+                        resolved_modes[s.id] = HvacMode.OFF
+                    explanations.append(
+                        f"ODU Mode Conflict on '{odu.id}': Head '{head.id}' in Space '{s.name}' turned OFF "
+                        f"(space in deadband float) to allow heating on active space(s)."
+                    )
+                continue
+
+            # Both sides have active demands or similar float states.
+            remaining_heaters = []
+            threshold_f = getattr(self.config, "boiler_conflict_recovery_threshold_f", 2.0)
+            for s, head in heating_heads:
+                deficit = get_heat_deficit(s)
+                in_recovery = deficit >= threshold_f
+
+                # Check if space has another active emitter on another producer (e.g. ODU1)
+                has_other_active_emitter = False
+                if resolved_emitters is not None:
+                    has_other_active_emitter = any(e_id != head.id for e_id in resolved_emitters.get(s.id, []))
+
+                hydronic_emitters = [e for e in s.emitters if isinstance(e, HydronicEmitter)]
+
+                if in_recovery and hydronic_emitters:
+                    # Space is in deep recovery -> divert to boiler!
+                    h_emitter = hydronic_emitters[0]
+                    if resolved_emitters is not None:
+                        # Remove mini-split heads for this space from candidate emitters
+                        resolved_emitters[s.id] = [
+                            e_id
+                            for e_id in resolved_emitters.get(s.id, [])
+                            if not any(isinstance(e, MiniSplitHead) and e.id == e_id for e in s.emitters)
+                        ]
+                        if h_emitter.id not in resolved_emitters[s.id]:
+                            resolved_emitters[s.id].append(h_emitter.id)
+                    resolved_boiler_zones.add((h_emitter.producer_id, h_emitter.zone_id))
+                    resolved_modes[s.id] = HvacMode.HEAT
+                    explanations.append(
+                        f"ODU Mode Conflict on '{odu.id}': Space '{s.name}' in setback recovery "
+                        f"(deficit {deficit:.1f}°F >= {threshold_f:.1f}°F) "
+                        "diverted heating to hydronic boiler to allow cooling on other space(s)."
+                    )
+                elif has_other_active_emitter:
+                    # Space still has heating coverage from another producer -> yield this head
+                    if resolved_emitters is not None:
+                        if head.id in resolved_emitters.get(s.id, []):
+                            resolved_emitters[s.id].remove(head.id)
+                    explanations.append(
+                        f"ODU Mode Conflict on '{odu.id}': Head '{head.id}' in Space '{s.name}' "
+                        "paused to allow cooling; "
+                        f"Space '{s.name}' maintains heating via other delivery unit(s)."
+                    )
+                elif not in_recovery:
+                    # Small deficit (< threshold) -> avoid boiler fallback, head yields
+                    if resolved_emitters is not None:
+                        if head.id in resolved_emitters.get(s.id, []):
+                            resolved_emitters[s.id].remove(head.id)
+                        if not resolved_emitters[s.id]:
+                            resolved_modes[s.id] = HvacMode.OFF
+                    else:
+                        resolved_modes[s.id] = HvacMode.OFF
+                    explanations.append(
+                        f"ODU Mode Conflict on '{odu.id}': Space '{s.name}' heating paused on '{head.id}' "
+                        f"(deficit {deficit:.1f}°F < {threshold_f:.1f}°F); cooling prioritized without boiler fallback."
+                    )
+                else:
+                    # In recovery but NO hydronic alternative exists
+                    remaining_heaters.append((s, head))
+
+            if remaining_heaters:
+                max_cooling_priority = max(s.priority for s, _ in cooling_heads)
+                max_heating_priority = max(s.priority for s, _ in remaining_heaters)
+
+                if max_cooling_priority > max_heating_priority:
+                    for s, head in remaining_heaters:
+                        if resolved_emitters is not None:
+                            if head.id in resolved_emitters.get(s.id, []):
+                                resolved_emitters[s.id].remove(head.id)
+                            if not resolved_emitters[s.id]:
+                                resolved_modes[s.id] = HvacMode.OFF
+                        else:
+                            resolved_modes[s.id] = HvacMode.OFF
                         explanations.append(
-                            f"ODU Mode Conflict on '{odu.id}': Space '{s.name}' diverted heating to hydronic boiler "
-                            f"to allow cooling on upper space(s)."
+                            f"ODU Mode Conflict on '{odu.id}': Space '{s.name}' heating paused; "
+                            f"cooling prioritized on higher-priority space."
                         )
                 else:
-                    # Cannot divert all heaters; resolve via space priority
-                    max_cooling_priority = max(s.priority for s, _ in cooling_spaces)
-                    max_heating_priority = max(s.priority for s, _ in heating_spaces)
-
-                    if max_cooling_priority > max_heating_priority:
-                        winning_mode = HvacMode.COOL
-                        for s, _ in heating_spaces:
+                    for s, head in cooling_heads:
+                        if resolved_emitters is not None:
+                            if head.id in resolved_emitters.get(s.id, []):
+                                resolved_emitters[s.id].remove(head.id)
+                            if not resolved_emitters[s.id]:
+                                resolved_modes[s.id] = HvacMode.OFF
+                        else:
                             resolved_modes[s.id] = HvacMode.OFF
-                            explanations.append(
-                                f"ODU Mode Conflict on '{odu.id}': Space '{s.name}' heating paused; "
-                                f"cooling prioritized on higher-priority space."
-                            )
-                    else:
-                        winning_mode = HvacMode.HEAT
-                        for s, _ in cooling_spaces:
-                            resolved_modes[s.id] = HvacMode.OFF
-                            explanations.append(
-                                f"ODU Mode Conflict on '{odu.id}': Space '{s.name}' cooling paused; "
-                                f"heating prioritized on higher-priority space."
-                            )
+                        explanations.append(
+                            f"ODU Mode Conflict on '{odu.id}': Space '{s.name}' cooling paused; "
+                            f"heating prioritized on higher-priority space."
+                        )
 
-        return resolved_modes, explanations
+        if candidate_emitters is None and requested_boiler_zones is None:
+            return resolved_modes, explanations
+
+        return resolved_modes, resolved_emitters, resolved_boiler_zones, explanations
 
     def arbitrate_shared_boiler_zones(
         self,
-        requested_boiler_zones: Set[Tuple[str, str]],
+        requested_boiler_zones: set[tuple[str, str]],
         topology: SystemTopology,
-        space_conditions: Dict[str, SpaceCondition],
-    ) -> Tuple[Set[Tuple[str, str]], List[str]]:
+        space_conditions: dict[str, SpaceCondition],
+    ) -> tuple[set[tuple[str, str]], list[str]]:
         """
         Arbitrates multiple spaces sharing the same boiler zone valve (e.g. Floor 2 Z2).
         Returns: (approved_boiler_zones, explanation_messages)
@@ -147,7 +257,8 @@ class ArbitratorEngine:
             # If zone was called by a slave, check if master permits or if slave should float
             master_calling = any(
                 space_conditions[m.id].comfort.demands_heat(space_conditions[m.id].current_temp)
-                for m in masters if m.id in space_conditions
+                for m in masters
+                if m.id in space_conditions
             )
 
             if not master_calling and slaves:

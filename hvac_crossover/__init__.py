@@ -3,39 +3,39 @@ hvac_crossover - Multi-Source HVAC Efficiency & Thermodynamic Crossover Optimize
 Decoupled library for optimizing heat pumps, boilers, multi-split constraints, and micro-zoning.
 """
 
-from .models import (
-    HvacMode,
-    HvacAction,
-    ProducerType,
-    EmitterType,
-    FuelType,
-    NetMeteringMode,
-    ThermalProfile,
-    SharedBoilerRole,
-    SystemPhase,
-    TariffSchedule,
-    Producer,
-    InverterHeatPumpProducer,
-    ModulatingBoilerProducer,
-    SteamBoilerProducer,
-    ProducerProfileFactory,
-    DeliveryUnit,
-    MiniSplitHead,
-    HydronicEmitter,
-    SmartRadiatorValve,
-    ComfortRange,
-    Space,
-    SpaceCondition,
-    SystemSnapshot,
-    SpaceDirective,
-    ProducerDirective,
-    Diagnostics,
-    DispatchPlan,
-    SystemTopology,
-)
 from .config import CoordinatorConfig
 from .coordinator import DualFuelCoordinator
-from .engines import EconomicsEngine, RecoveryEngine, ArbitratorEngine
+from .engines import ArbitratorEngine, EconomicsEngine, RecoveryEngine
+from .models import (
+    ComfortRange,
+    DeliveryUnit,
+    Diagnostics,
+    DispatchPlan,
+    EmitterType,
+    FuelType,
+    HvacAction,
+    HvacMode,
+    HydronicEmitter,
+    InverterHeatPumpProducer,
+    MiniSplitHead,
+    ModulatingBoilerProducer,
+    NetMeteringMode,
+    Producer,
+    ProducerDirective,
+    ProducerProfileFactory,
+    ProducerType,
+    SharedBoilerRole,
+    SmartRadiatorValve,
+    Space,
+    SpaceCondition,
+    SpaceDirective,
+    SteamBoilerProducer,
+    SystemPhase,
+    SystemSnapshot,
+    SystemTopology,
+    TariffSchedule,
+    ThermalProfile,
+)
 
 __version__ = "0.1.3"
 __all__ = [

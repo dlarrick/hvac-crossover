@@ -1,10 +1,12 @@
 """Economics and thermodynamic crossover calculation engine."""
 
-from typing import List, Tuple, Optional, Dict, Any
-from ..models.tariffs import TariffSchedule
-from ..models.producers import Producer, InverterHeatPumpProducer, ModulatingBoilerProducer
+from typing import Any
+
+from ..models.delivery import DeliveryUnit, MiniSplitHead
+from ..models.enums import FuelType
+from ..models.producers import InverterHeatPumpProducer, ModulatingBoilerProducer, Producer
 from ..models.spaces import Space
-from ..models.delivery import DeliveryUnit, MiniSplitHead, HydronicEmitter
+from ..models.tariffs import TariffSchedule
 from ..models.topology import SystemTopology
 
 
@@ -17,12 +19,13 @@ class EconomicsEngine:
         self,
         tariffs: TariffSchedule,
         boiler: Producer,
-        load_btu: Optional[float] = None,
-        telemetry: Optional[Dict[str, Any]] = None,
+        load_btu: float | None = None,
+        telemetry: dict[str, Any] | None = None,
     ) -> float:
         """
         Derives critical break-even COP where Cost_HP ($/MMBtu) == Cost_Boiler ($/MMBtu).
         COP* = (100,000 / 3,412.14) * eta_boiler * (P_elec / P_gas)
+        For propane: COP* = (91,500 / 3,412.14) * eta_boiler * (P_elec / P_propane_gal)
         """
         elec_cost = tariffs.marginal_electric_cost(
             telemetry.get("solar_export_watts", 0.0) if telemetry else 0.0,
@@ -34,6 +37,12 @@ class EconomicsEngine:
         else:
             boiler_eff = getattr(boiler, "rated_afue", 0.81)
 
+        fuel_type = getattr(boiler, "fuel_type", FuelType.NATURAL_GAS)
+        if fuel_type == FuelType.PROPANE and tariffs.propane_cost_per_gal > 0:
+            # 1 gal propane = 91,500 BTU
+            return (91500.0 / 3412.1416) * boiler_eff * (elec_cost / tariffs.propane_cost_per_gal)
+
+        # Natural gas (1 therm = 100,000 BTU)
         return (100000.0 / 3412.1416) * boiler_eff * (elec_cost / tariffs.gas_cost_per_therm)
 
     def compute_crossover_temperature(
@@ -41,11 +50,11 @@ class EconomicsEngine:
         tariffs: TariffSchedule,
         odu: InverterHeatPumpProducer,
         boiler: Producer,
-        load_btu: Optional[float] = None,
-        telemetry: Optional[Dict[str, Any]] = None,
+        load_btu: float | None = None,
+        telemetry: dict[str, Any] | None = None,
         part_load: bool = False,
-        temp_bounds: Tuple[float, float] = (-15.0, 65.0),
-    ) -> Optional[float]:
+        temp_bounds: tuple[float, float] = (-15.0, 65.0),
+    ) -> float | None:
         """
         Finds the outdoor ambient temperature where the ODU's COP equals the break-even COP*.
         Uses bisection search over temp_bounds.
@@ -56,7 +65,7 @@ class EconomicsEngine:
         if odu.cop_at(low, part_load=part_load) >= target_cop:
             return low  # Heat pump is cheaper across the entire range
         if odu.cop_at(high, part_load=part_load) <= target_cop:
-            return high # Boiler is cheaper across the entire range
+            return high  # Boiler is cheaper across the entire range
 
         for _ in range(50):
             mid = (low + high) / 2.0
@@ -76,10 +85,10 @@ class EconomicsEngine:
         outdoor_temp_f: float,
         tariffs: TariffSchedule,
         topology: SystemTopology,
-        load_btu: Optional[float] = None,
-        telemetry: Optional[Dict[str, Any]] = None,
+        load_btu: float | None = None,
+        telemetry: dict[str, Any] | None = None,
         part_load: bool = False,
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         """
         Returns (delivered_cost_per_mmbtu, effective_cop_or_efficiency) for a delivery unit.
         """
@@ -116,10 +125,10 @@ class EconomicsEngine:
         outdoor_temp_f: float,
         tariffs: TariffSchedule,
         topology: SystemTopology,
-        load_btu: Optional[float] = None,
-        telemetry: Optional[Dict[str, Any]] = None,
+        load_btu: float | None = None,
+        telemetry: dict[str, Any] | None = None,
         part_load: bool = False,
-    ) -> List[Tuple[DeliveryUnit, float, float]]:
+    ) -> list[tuple[DeliveryUnit, float, float]]:
         """
         Ranks all delivery units in a space from lowest cost to highest cost per delivered MMBtu.
         Returns list of (delivery_unit, cost_per_mmbtu, efficiency_or_cop).

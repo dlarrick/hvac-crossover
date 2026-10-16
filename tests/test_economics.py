@@ -1,14 +1,14 @@
 """Unit tests for EconomicsEngine, tariffs, and boiler efficiency curves."""
 
 import unittest
-from hvac_crossover.models.tariffs import TariffSchedule
-from hvac_crossover.models.enums import NetMeteringMode
-from hvac_crossover.models.producers import ProducerProfileFactory, ModulatingBoilerProducer
+
 from hvac_crossover.engines.economics import EconomicsEngine
+from hvac_crossover.models.enums import FuelType, NetMeteringMode
+from hvac_crossover.models.producers import ModulatingBoilerProducer, ProducerProfileFactory
+from hvac_crossover.models.tariffs import TariffSchedule
 
 
 class TestEconomicsEngine(unittest.TestCase):
-
     def setUp(self):
         self.economics = EconomicsEngine()
         self.tariffs = TariffSchedule(
@@ -68,6 +68,58 @@ class TestEconomicsEngine(unittest.TestCase):
         # Hot return water (145°F) from fin-tube baseboard -> 86.5% non-condensing
         eff_hot = self.boiler.efficiency_at(load_btu=40000, return_water_temp_f=145.0)
         self.assertEqual(eff_hot, 0.865)
+
+    def test_propane_boiler_dew_point_shift(self):
+        propane_boiler = ModulatingBoilerProducer(
+            id="alta_lp",
+            name="Alta 150 Propane",
+            nominal_btu=150000,
+            fuel_type=FuelType.PROPANE,
+            rated_afue=0.94,
+        )
+        # Cold return (95°F) -> 94.0% deep condensation
+        eff_deep = propane_boiler.efficiency_at(load_btu=40000, return_water_temp_f=95.0)
+        self.assertEqual(eff_deep, 0.940)
+
+        # Return at 105°F -> active condensation (91.5%)
+        eff_mid = propane_boiler.efficiency_at(load_btu=40000, return_water_temp_f=105.0)
+        self.assertEqual(eff_mid, 0.915)
+
+        # Return at 130°F (well above propane dew point) -> strictly non-condensing (86.0%)
+        eff_dry = propane_boiler.efficiency_at(load_btu=40000, return_water_temp_f=130.0)
+        self.assertEqual(eff_dry, 0.860)
+
+        # Return at 120°F (near propane dew point) -> weak onset (88.0%)
+        # Note: on natural gas at 120°F, condensing is 89.0%
+        self.assertEqual(propane_boiler.efficiency_at(load_btu=40000, return_water_temp_f=120.0), 0.880)
+
+    def test_propane_delivered_cost_and_crossover(self):
+        # Propane at $3.20/gal, electricity at $0.25/kWh
+        tariffs = TariffSchedule(
+            elec_cost_per_kwh=0.25,
+            gas_cost_per_therm=1.88,
+            propane_cost_per_gal=3.20,
+        )
+        propane_boiler = ModulatingBoilerProducer(
+            id="alta_lp",
+            name="Alta 150 Propane",
+            nominal_btu=150000,
+            fuel_type=FuelType.PROPANE,
+            rated_afue=0.94,
+        )
+
+        # Raw fuel input cost: $3.20 / 0.0915 = $34.9727/MMBtu
+        self.assertAlmostEqual(tariffs.propane_cost_per_mmbtu_input, 34.97, places=1)
+
+        # Delivered cost at 94% AFUE: 34.9727 / 0.94 = $37.20/MMBtu
+        cost_mmbtu = propane_boiler.delivered_cost_per_mmbtu(outdoor_temp_f=35.0, tariffs=tariffs, load_btu=40000)
+        self.assertAlmostEqual(cost_mmbtu, 37.20, places=1)
+
+        # With expensive propane, the crossover COP* drops significantly:
+        # COP* = (elec_cost / 0.003412) / boiler_delivered_cost
+        cop_star = self.economics.compute_crossover_cop(tariffs, propane_boiler)
+        # Heat pump wins at much lower COP (and therefore lower outdoor temps)
+        self.assertLess(cop_star, 2.1)
 
 
 if __name__ == "__main__":

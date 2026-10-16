@@ -1,10 +1,10 @@
 """System topology graph container and validation."""
 
 from dataclasses import dataclass, field
-from typing import List, Dict
+
+from .delivery import HydronicEmitter
 from .producers import Producer
 from .spaces import Space
-from .delivery import DeliveryUnit, HydronicEmitter
 
 
 @dataclass
@@ -13,8 +13,9 @@ class SystemTopology:
     Asset and connectivity graph mapping Producers to Delivery Units and Spaces.
     Validates physical constraints and unique ID references.
     """
-    producers: List[Producer] = field(default_factory=list)
-    spaces: List[Space] = field(default_factory=list)
+
+    producers: list[Producer] = field(default_factory=list)
+    spaces: list[Space] = field(default_factory=list)
 
     def __post_init__(self):
         self._validate()
@@ -57,7 +58,7 @@ class SystemTopology:
                 return s
         raise KeyError(f"Space '{space_id}' not found in topology")
 
-    def get_shared_hydronic_spaces(self, boiler_id: str, zone_id: str) -> List[Space]:
+    def get_shared_hydronic_spaces(self, boiler_id: str, zone_id: str) -> list[Space]:
         """Finds all spaces sharing the same hydronic zone loop valve."""
         shared = []
         for s in self.spaces:
@@ -67,7 +68,7 @@ class SystemTopology:
                     break
         return shared
 
-    def get_spaces_for_producer(self, producer_id: str) -> List[Space]:
+    def get_spaces_for_producer(self, producer_id: str) -> list[Space]:
         """Finds all spaces served by any delivery unit connected to this producer."""
         matched = []
         for s in self.spaces:

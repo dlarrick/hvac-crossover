@@ -5,6 +5,7 @@ from enum import Enum
 
 class HvacMode(str, Enum):
     """Requested operational mode for a space or delivery unit."""
+
     OFF = "off"
     HEAT = "heat"
     COOL = "cool"
@@ -15,6 +16,7 @@ class HvacMode(str, Enum):
 
 class HvacAction(str, Enum):
     """Current instantaneous action being performed."""
+
     OFF = "off"
     IDLE = "idle"
     HEATING = "heating"
@@ -25,6 +27,7 @@ class HvacAction(str, Enum):
 
 class ProducerType(str, Enum):
     """Type of thermal energy generator."""
+
     INVERTER_HEAT_PUMP = "inverter_heat_pump"
     MODULATING_BOILER = "modulating_boiler"
     ATMOSPHERIC_BOILER = "atmospheric_boiler"
@@ -34,6 +37,7 @@ class ProducerType(str, Enum):
 
 class EmitterType(str, Enum):
     """Terminal heat/cool delivery hardware."""
+
     DUCTLESS_HEAD = "ductless_head"
     DUCTED_AIR_HANDLER = "ducted_air_handler"
     FIN_TUBE_BASEBOARD = "fin_tube_baseboard"
@@ -44,6 +48,7 @@ class EmitterType(str, Enum):
 
 class FuelType(str, Enum):
     """Fuel or energy source."""
+
     ELECTRICITY = "electricity"
     NATURAL_GAS = "natural_gas"
     OIL = "oil"
@@ -52,12 +57,14 @@ class FuelType(str, Enum):
 
 class NetMeteringMode(str, Enum):
     """Solar net metering compensation tariff."""
+
     ONE_TO_ONE = "1_to_1"
     NET_BILLING = "net_billing"
 
 
 class ThermalProfile(str, Enum):
     """Envelope thermal loss and mass archetype."""
+
     HISTORIC_VICTORIAN = "historic_victorian"
     AVERAGE_INSULATED = "average_insulated"
     MODERN_TIGHT = "modern_tight"
@@ -65,6 +72,7 @@ class ThermalProfile(str, Enum):
 
 class SharedBoilerRole(str, Enum):
     """Role in shared hydronic zone arbitration."""
+
     INDEPENDENT = "independent"
     MASTER = "master"
     SLAVE = "slave"
@@ -72,6 +80,7 @@ class SharedBoilerRole(str, Enum):
 
 class SystemPhase(str, Enum):
     """Macro operational phase of the system."""
+
     SETBACK_RECOVERY = "setback_recovery"
     PLATEAU_MAINTENANCE = "plateau_maintenance"
     PASSIVE_VENTILATION = "passive_ventilation"
