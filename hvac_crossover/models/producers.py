@@ -71,6 +71,15 @@ class InverterHeatPumpProducer(Producer):
     refrigerant: str = "R410A"
     max_ports: int = 3
     supports_simultaneous_heat_cool: bool = False  # True for VRF Heat Recovery (e.g. City Multi with BC controller)
+    min_operational_temp_f: float = -4.0  # Rated minimum outdoor operational envelope temperature (°F)
+
+    def is_within_envelope(self, outdoor_temp_f: float, safety_band_f: float = 0.0) -> bool:
+        """Returns True if outdoor temp is at or above minimum operational envelope plus safety margin."""
+        return outdoor_temp_f >= (self.min_operational_temp_f + safety_band_f)
+
+    def effective_min_temp_f(self, safety_band_f: float = 0.0) -> float:
+        """Returns the effective low ambient cutoff threshold including the safety margin."""
+        return self.min_operational_temp_f + safety_band_f
 
     def cop_at(self, outdoor_temp_f: float, part_load: bool = False) -> float:
         """Interpolates COP at given outdoor ambient temperature."""
@@ -209,21 +218,42 @@ class ProducerProfileFactory:
     """Loads pre-seeded equipment models from the profiles/ library."""
 
     @staticmethod
+    def resolve_profile_path(profile_str: str) -> str:
+        """Finds profile JSON in installed hvac_crossover library or user path."""
+        if os.path.isabs(profile_str) and os.path.exists(profile_str):
+            return profile_str
+
+        pkg_dir = os.path.dirname(os.path.dirname(__file__))
+        pkg_profiles_dir = os.path.join(pkg_dir, "profiles", "producers")
+        candidate = os.path.join(pkg_profiles_dir, profile_str)
+        if not candidate.endswith(".json"):
+            candidate += ".json"
+        if os.path.exists(candidate):
+            return candidate
+
+        candidate_rel = os.path.join(pkg_dir, profile_str)
+        if not candidate_rel.endswith(".json"):
+            candidate_rel += ".json"
+        if os.path.exists(candidate_rel):
+            return candidate_rel
+
+        if os.path.exists(profile_str):
+            return profile_str
+        if os.path.exists(profile_str + ".json"):
+            return profile_str + ".json"
+
+        return profile_str
+
+    @classmethod
     def load_from_json(
+        cls,
         file_path: str,
         producer_id: str,
         name: str | None = None,
         fuel_type: FuelType | None = None,
     ) -> Producer:
-        if not os.path.exists(file_path):
-            pkg_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-            candidate = os.path.join(pkg_dir, "profiles", "producers", file_path)
-            if os.path.exists(candidate):
-                file_path = candidate
-            elif os.path.exists(os.path.join(pkg_dir, file_path)):
-                file_path = os.path.join(pkg_dir, file_path)
-
-        with open(file_path, encoding="utf-8") as f:
+        resolved_path = cls.resolve_profile_path(file_path)
+        with open(resolved_path, encoding="utf-8") as f:
             data = json.load(f)
 
         p_type = data.get("producer_type", "inverter_heat_pump")
@@ -239,6 +269,8 @@ class ProducerProfileFactory:
                 else None
             )
             cap_curve = {float(k): float(v) for k, v in perf.get("max_capacity_btu", {}).items()}
+            raw_min_temp = data.get("min_operational_temp_f", data.get("min_operating_temp_f"))
+            min_temp_f = float(raw_min_temp) if raw_min_temp is not None else -4.0
 
             return InverterHeatPumpProducer(
                 id=producer_id,
@@ -249,6 +281,7 @@ class ProducerProfileFactory:
                 capacity_curve_btu=cap_curve,
                 refrigerant=data.get("refrigerant", "R410A"),
                 max_ports=int(data.get("max_ports", 3)),
+                min_operational_temp_f=min_temp_f,
             )
 
         if p_type == "modulating_boiler":

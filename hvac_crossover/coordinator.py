@@ -9,6 +9,7 @@ from .engines.recovery import RecoveryEngine
 from .models.delivery import HydronicEmitter, MiniSplitHead
 from .models.enums import HvacAction, HvacMode, ProducerType
 from .models.plan import Diagnostics, DispatchPlan, ProducerDirective, SpaceDirective
+from .models.producers import InverterHeatPumpProducer
 from .models.snapshot import SystemSnapshot
 from .models.spaces import ComfortRange, SpaceCondition
 from .models.tariffs import TariffSchedule
@@ -149,9 +150,19 @@ class DualFuelCoordinator:
                         load_btu=load_btu,
                         telemetry=snapshot.telemetry,
                         part_load=True,
+                        safety_band_f=self.config.heat_pump_min_temp_safety_band_f,
                     )
                     if ranked:
                         best_emitter, best_cost, best_eff = ranked[0]
+                        if best_cost == float("inf"):
+                            candidate_space_modes[space.id] = HvacMode.OFF
+                            candidate_emitters[space.id] = []
+                            explanations.append(
+                                f"Space '{space.name}' heating unavailable: all delivery units locked out "
+                                f"due to low outdoor temperature ({snapshot.outdoor_temp:.1f}°F)."
+                            )
+                            continue
+
                         space_costs[space.id] = round(best_cost, 2)
                         space_cops[space.id] = round(best_eff, 2)
 
@@ -163,6 +174,26 @@ class DualFuelCoordinator:
                         if isinstance(best_emitter, HydronicEmitter):
                             for e in all_of_type:
                                 requested_boiler_zones.add((e.producer_id, e.zone_id))
+
+                            # If any heat pump head in space was locked out by low temperature, explain:
+                            for e in space.emitters:
+                                if isinstance(e, MiniSplitHead):
+                                    prod = self.topology.get_producer(e.producer_id)
+                                    if isinstance(prod, InverterHeatPumpProducer) and not prod.is_within_envelope(
+                                        snapshot.outdoor_temp, self.config.heat_pump_min_temp_safety_band_f
+                                    ):
+                                        effective_cutoff = prod.effective_min_temp_f(
+                                            self.config.heat_pump_min_temp_safety_band_f
+                                        )
+                                        explanations.append(
+                                            f"Heat pump '{prod.name}' locked out: outdoor temperature "
+                                            f"{snapshot.outdoor_temp:.1f}°F "
+                                            f"is below safe operational threshold {effective_cutoff:.1f}°F "
+                                            f"({prod.min_operational_temp_f:.1f}°F envelope + "
+                                            f"{self.config.heat_pump_min_temp_safety_band_f:.1f}°F safety band). "
+                                            f"Dispatched hydronic heat."
+                                        )
+                                        break
 
         # 4. Multi-Split ODU Mode Conflict Arbitration
         if self.config.enforce_odu_mode_locks:
@@ -229,6 +260,18 @@ class DualFuelCoordinator:
         odu_operational_modes: dict[str, str] = {}
         for producer in self.topology.producers:
             if producer.producer_type == ProducerType.INVERTER_HEAT_PUMP:
+                # Check low ambient operational envelope lockout
+                if isinstance(producer, InverterHeatPumpProducer) and not producer.is_within_envelope(
+                    snapshot.outdoor_temp, self.config.heat_pump_min_temp_safety_band_f
+                ):
+                    odu_operational_modes[producer.id] = HvacMode.OFF.value
+                    producer_directives[producer.id] = ProducerDirective(
+                        producer_id=producer.id,
+                        operational_mode=HvacMode.OFF,
+                        is_active=False,
+                    )
+                    continue
+
                 # Find mode of active heads on this ODU
                 active_modes = []
                 for s in self.topology.get_spaces_for_producer(producer.id):

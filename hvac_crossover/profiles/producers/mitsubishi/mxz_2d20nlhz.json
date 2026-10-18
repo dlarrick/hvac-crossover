@@ -6,6 +6,7 @@
   "producer_type": "inverter_heat_pump",
   "refrigerant": "R454B",
   "max_ports": 2,
+  "min_operational_temp_f": -13.0,
   "nominal_heating_btu": 20000,
   "nominal_cooling_btu": 20000,
   "heating_performance": {

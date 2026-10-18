@@ -234,6 +234,65 @@ class TestDualFuelCoordinator(unittest.TestCase):
         self.assertEqual(plan.space_directives["guest_room"].hvac_mode, HvacMode.OFF)
         self.assertEqual(len(plan.producer_directives["alta150"].active_zones), 0)
 
+    def test_heat_pump_low_ambient_lockout_with_hydronic_fallback(self):
+        """
+        When outdoor temp is below the heat pump operational envelope + safety band,
+        the heat pump is locked out and heating falls back to hydronics.
+        """
+        haier = ProducerProfileFactory.load_from_json("haier/3u24ms2vhb.json", "odu_haier")
+        boiler = ProducerProfileFactory.load_from_json("bradford_white/bwmfthw140p.json", "bw_boiler")
+        condo = Space(
+            id="condo",
+            name="Condo",
+            emitters=[
+                MiniSplitHead(id="lr_head", producer_id="odu_haier", nominal_btu=12000),
+                HydronicEmitter(id="baseboard", producer_id="bw_boiler", zone_id="z1"),
+            ],
+            floor_area_sqft=1000,
+        )
+        topo = SystemTopology(producers=[haier, boiler], spaces=[condo])
+        coord = DualFuelCoordinator(topo)
+
+        # Haier envelope: -4°F, safety band: 5°F -> cutoff is 1°F
+        # At 0°F (below 1°F cutoff), heat pump is locked out even though COP is theoretically positive
+        plan = coord.evaluate_conditions(
+            outdoor_temp=0.0,
+            tariffs=TariffSchedule(elec_cost_per_kwh=0.226, gas_cost_per_therm=1.88, propane_cost_per_gal=3.691),
+            spaces={"condo": {"current": 66.0, "heat_to": 68.0}},
+        )
+        self.assertEqual(plan.space_directives["condo"].active_delivery_unit_ids, ["baseboard"])
+        self.assertEqual(plan.producer_directives["odu_haier"].operational_mode, HvacMode.OFF)
+        self.assertFalse(plan.producer_directives["odu_haier"].is_active)
+        self.assertTrue(plan.producer_directives["bw_boiler"].is_active)
+        self.assertIn("z1", plan.producer_directives["bw_boiler"].active_zones)
+        self.assertTrue(any("locked out" in exp for exp in plan.diagnostics.explanations))
+
+    def test_heat_pump_low_ambient_lockout_only_heat_pump(self):
+        """
+        When outdoor temp is below envelope + safety band and space has only heat pump,
+        heating is safely disabled.
+        """
+        haier = ProducerProfileFactory.load_from_json("haier/3u24ms2vhb.json", "odu_haier")
+        space = Space(
+            id="cabin",
+            name="Cabin",
+            emitters=[
+                MiniSplitHead(id="cabin_head", producer_id="odu_haier", nominal_btu=12000),
+            ],
+            floor_area_sqft=500,
+        )
+        topo = SystemTopology(producers=[haier], spaces=[space])
+        coord = DualFuelCoordinator(topo)
+
+        plan = coord.evaluate_conditions(
+            outdoor_temp=-2.0,
+            tariffs=TariffSchedule(elec_cost_per_kwh=0.226, gas_cost_per_therm=1.88, propane_cost_per_gal=3.691),
+            spaces={"cabin": {"current": 60.0, "heat_to": 68.0}},
+        )
+        self.assertEqual(plan.space_directives["cabin"].hvac_mode, HvacMode.OFF)
+        self.assertEqual(plan.space_directives["cabin"].active_delivery_unit_ids, [])
+        self.assertFalse(plan.producer_directives["odu_haier"].is_active)
+
 
 if __name__ == "__main__":
     unittest.main()

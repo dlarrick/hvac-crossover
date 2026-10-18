@@ -121,6 +121,35 @@ class TestEconomicsEngine(unittest.TestCase):
         # Heat pump wins at much lower COP (and therefore lower outdoor temps)
         self.assertLess(cop_star, 2.1)
 
+    def test_delivery_unit_cost_propane(self):
+        tariffs = TariffSchedule(
+            elec_cost_per_kwh=0.226,
+            gas_cost_per_therm=1.88,
+            propane_cost_per_gal=3.691,
+        )
+        propane_boiler = ModulatingBoilerProducer(
+            id="bw_lp",
+            name="Bradford White Propane",
+            nominal_btu=140000,
+            fuel_type=FuelType.PROPANE,
+            rated_afue=0.95,
+        )
+        from hvac_crossover.models.delivery import HydronicEmitter
+        from hvac_crossover.models.topology import SystemTopology
+
+        emitter = HydronicEmitter(id="bb", producer_id="bw_lp", zone_id="z1")
+        topo = SystemTopology(producers=[propane_boiler], spaces=[])
+
+        cost, eff = self.economics.evaluate_delivery_unit_cost(
+            delivery_unit=emitter,
+            outdoor_temp_f=40.0,
+            tariffs=tariffs,
+            topology=topo,
+        )
+        # Fuel cost: 3.691 / 0.0915 = 40.3388 / 0.95 = 42.46/MMBtu
+        self.assertAlmostEqual(cost, 42.46, places=1)
+        self.assertEqual(eff, 0.95)
+
 
 if __name__ == "__main__":
     unittest.main()

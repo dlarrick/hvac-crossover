@@ -22,7 +22,10 @@ class CoordinatorConfig:
     economic_switching_buffer: float = 1.05
 
     # Absolute Outdoor Temperature Safeguards
-    min_heat_pump_temp_f: float = -13.0  # Minimum rated operational temperature for cold-climate inverters
+    min_heat_pump_temp_f: float = -13.0  # Fallback minimum operational temperature if not specified on producer
+    heat_pump_min_temp_safety_band_f: float = (
+        5.0  # Configurable safety band in °F above operational envelope before lockout
+    )
 
     # Operational Interlocks
     passive_ventilation_override: bool = True  # Open window/skylight forces space delivery units to OFF

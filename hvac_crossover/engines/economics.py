@@ -88,6 +88,7 @@ class EconomicsEngine:
         load_btu: float | None = None,
         telemetry: dict[str, Any] | None = None,
         part_load: bool = False,
+        safety_band_f: float = 5.0,
     ) -> tuple[float, float]:
         """
         Returns (delivered_cost_per_mmbtu, effective_cop_or_efficiency) for a delivery unit.
@@ -95,6 +96,9 @@ class EconomicsEngine:
         producer = topology.get_producer(delivery_unit.producer_id)
 
         if isinstance(producer, InverterHeatPumpProducer):
+            if not producer.is_within_envelope(outdoor_temp_f, safety_band_f=safety_band_f):
+                return float("inf"), 0.0
+
             base_cop = producer.cop_at(outdoor_temp_f, part_load=part_load)
             if isinstance(delivery_unit, MiniSplitHead):
                 eff_cop = delivery_unit.effective_cop(base_cop, outdoor_temp_f)
@@ -111,12 +115,27 @@ class EconomicsEngine:
         elif isinstance(producer, ModulatingBoilerProducer):
             return_temp = telemetry.get("boiler_return_temp") if telemetry else None
             eff = producer.efficiency_at(load_btu=load_btu, return_water_temp_f=return_temp)
-            cost_mmbtu = tariffs.gas_cost_per_therm / (eff * 0.100)
+            cost_mmbtu = producer.delivered_cost_per_mmbtu(
+                outdoor_temp_f=outdoor_temp_f,
+                tariffs=tariffs,
+                load_btu=load_btu,
+                telemetry=telemetry,
+                part_load=part_load,
+            )
             return cost_mmbtu, eff
 
         else:
             eff = getattr(producer, "rated_afue", 0.81)
-            cost_mmbtu = tariffs.gas_cost_per_therm / (eff * 0.100)
+            if hasattr(producer, "delivered_cost_per_mmbtu"):
+                cost_mmbtu = producer.delivered_cost_per_mmbtu(
+                    outdoor_temp_f=outdoor_temp_f,
+                    tariffs=tariffs,
+                    load_btu=load_btu,
+                    telemetry=telemetry,
+                    part_load=part_load,
+                )
+            else:
+                cost_mmbtu = tariffs.gas_cost_per_therm / (eff * 0.100)
             return cost_mmbtu, eff
 
     def rank_space_emitters_by_cost(
@@ -128,6 +147,7 @@ class EconomicsEngine:
         load_btu: float | None = None,
         telemetry: dict[str, Any] | None = None,
         part_load: bool = False,
+        safety_band_f: float = 5.0,
     ) -> list[tuple[DeliveryUnit, float, float]]:
         """
         Ranks all delivery units in a space from lowest cost to highest cost per delivered MMBtu.
@@ -143,6 +163,7 @@ class EconomicsEngine:
                 load_btu=load_btu,
                 telemetry=telemetry,
                 part_load=part_load,
+                safety_band_f=safety_band_f,
             )
             ranked.append((d, cost, eff))
 
