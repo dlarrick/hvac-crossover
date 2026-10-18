@@ -1,0 +1,25 @@
+{
+  "make": "Haier",
+  "series": "FlexFit Multi-Zone",
+  "model": "3U24MS2VHB",
+  "producer_type": "inverter_heat_pump",
+  "refrigerant": "R410A",
+  "max_ports": 3,
+  "min_operational_temp_f": -4.0,
+  "nominal_heating_btu": 24000,
+  "nominal_cooling_btu": 24000,
+  "heating_performance": {
+    "full_load_cop": {
+      "47": 3.19,
+      "17": 2.63,
+      "5": 2.31,
+      "-4": 2.02
+    },
+    "max_capacity_btu": {
+      "47": 25600,
+      "17": 17720,
+      "5": 14960,
+      "-4": 13500
+    }
+  }
+}

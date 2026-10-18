@@ -6,6 +6,7 @@
   "producer_type": "inverter_heat_pump",
   "refrigerant": "R410A",
   "max_ports": 3,
+  "min_operational_temp_f": -13.0,
   "nominal_heating_btu": 30000,
   "nominal_cooling_btu": 28400,
   "heating_performance": {

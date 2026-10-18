@@ -1,9 +1,9 @@
 """Space (Room), Comfort Range, and dynamic Space Condition models."""
 
 from dataclasses import dataclass, field
-from typing import List, Optional
-from .enums import ThermalProfile, SharedBoilerRole
+
 from .delivery import DeliveryUnit
+from .enums import SharedBoilerRole, ThermalProfile
 
 
 @dataclass(frozen=True)
@@ -14,8 +14,9 @@ class ComfortRange:
     - cool_to=None: Uncontrolled on the high end (no cooling).
     - Both None: Completely uncontrolled (e.g. passive thermal mass banking).
     """
-    heat_to: Optional[float] = None
-    cool_to: Optional[float] = None
+
+    heat_to: float | None = None
+    cool_to: float | None = None
 
     def demands_heat(self, current_temp: float) -> bool:
         """True if temperature has fallen below the heating comfort boundary."""
@@ -47,9 +48,10 @@ class Space:
     """
     A distinct living space / room with associated delivery hardware and thermal geometry.
     """
+
     id: str
     name: str
-    emitters: List[DeliveryUnit] = field(default_factory=list)
+    emitters: list[DeliveryUnit] = field(default_factory=list)
 
     # Geometry & Thermal Mass
     floor_area_sqft: float = 300.0
@@ -102,6 +104,7 @@ class SpaceCondition:
     """
     Dynamic snapshot of conditions and demand within a space at evaluation time.
     """
+
     current_temp: float
     comfort: ComfortRange
     window_open: bool = False

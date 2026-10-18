@@ -1,0 +1,11 @@
+{
+  "make": "Bradford White",
+  "series": "Brute FT",
+  "model": "B/MFTHW140(P)",
+  "producer_type": "modulating_boiler",
+  "fuel_type": "propane",
+  "nominal_heating_btu": 140000,
+  "min_fire_btu": 14000,
+  "turndown_ratio": 10.0,
+  "rated_afue": 0.95
+}
