@@ -9,6 +9,10 @@ from .enums import NetMeteringMode
 class TariffSchedule:
     """
     Utility rate schedule for electricity and fossil fuels.
+
+    Note on bulk delivered fuels (oil and propane):
+    Fuel rates should reflect marginal replacement cost (anticipated next refill price)
+    rather than sunk delivery ticket costs, unless a fixed pre-buy contract applies.
     """
 
     elec_cost_per_kwh: float
