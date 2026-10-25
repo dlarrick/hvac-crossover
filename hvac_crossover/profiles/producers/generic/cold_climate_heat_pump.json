@@ -1,0 +1,26 @@
+{
+  "make": "Generic",
+  "series": "Cold-Climate Multi-Zone Heat Pump (Conservative Baseline)",
+  "model": "generic/cold_climate_heat_pump",
+  "producer_type": "inverter_heat_pump",
+  "refrigerant": "R410A",
+  "max_ports": 4,
+  "min_operational_temp_f": -4.0,
+  "nominal_heating_btu": 24000,
+  "nominal_cooling_btu": 24000,
+  "_note": "Conservative baseline for cold-climate inverter heat pumps rated to -4°F. COP values are intentionally pessimistic relative to top-tier units (e.g. Mitsubishi H2i). Suitable for equipment selection when the exact model's spec sheet is unavailable.",
+  "heating_performance": {
+    "full_load_cop": {
+      "47": 3.30,
+      "17": 2.40,
+      "5": 2.00,
+      "-4": 1.75
+    },
+    "max_capacity_btu": {
+      "47": 24000,
+      "17": 18000,
+      "5": 15000,
+      "-4": 12000
+    }
+  }
+}

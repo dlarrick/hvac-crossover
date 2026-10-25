@@ -1,0 +1,24 @@
+{
+  "make": "Generic",
+  "series": "Standard Mini-Split Heat Pump (Conservative Baseline)",
+  "model": "generic/standard_heat_pump",
+  "producer_type": "inverter_heat_pump",
+  "refrigerant": "R410A",
+  "max_ports": 4,
+  "min_operational_temp_f": 5.0,
+  "nominal_heating_btu": 24000,
+  "nominal_cooling_btu": 24000,
+  "_note": "Conservative baseline for standard mini-split heat pumps not rated below 5°F. Not suitable for primary heating in climates with extended sub-5°F operation. COP values reflect typical non-Hyper-Heat inverter performance.",
+  "heating_performance": {
+    "full_load_cop": {
+      "47": 3.00,
+      "17": 2.00,
+      "5": 1.50
+    },
+    "max_capacity_btu": {
+      "47": 24000,
+      "17": 16000,
+      "5": 10000
+    }
+  }
+}

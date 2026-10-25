@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hvac-crossover"
-version = "0.1.4"
+version = "0.1.5"
 description = "Multi-source HVAC efficiency optimizer and thermodynamic crossover coordinator"
 readme = "README.md"
 requires-python = ">=3.10"

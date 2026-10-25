@@ -1,0 +1,10 @@
+{
+  "make": "Generic",
+  "series": "Atmospheric Cast-Iron Boiler (Conservative Baseline)",
+  "model": "generic/atmospheric_cast_iron_boiler",
+  "producer_type": "steam_boiler",
+  "nominal_heating_btu": 100000,
+  "rated_afue": 0.82,
+  "min_run_time_minutes": 20,
+  "_note": "Conservative baseline for legacy atmospheric cast-iron boilers (hot water or steam). Fixed non-condensing efficiency of 0.82 AFUE. Modeled as a steam_boiler (fixed-fire, minimum run-time enforced). Fuel is fixed to natural_gas by the steam_boiler producer model. If burning propane or oil, use a manual producer configuration instead."
+}
