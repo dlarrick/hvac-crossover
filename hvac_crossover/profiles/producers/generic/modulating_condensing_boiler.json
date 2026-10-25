@@ -1,0 +1,12 @@
+{
+  "make": "Generic",
+  "series": "Modulating Condensing Boiler (Conservative Baseline)",
+  "model": "generic/modulating_condensing_boiler",
+  "producer_type": "modulating_boiler",
+  "fuel_type": "natural_gas",
+  "nominal_heating_btu": 100000,
+  "min_fire_btu": 25000,
+  "turndown_ratio": 4.0,
+  "rated_afue": 0.95,
+  "_note": "Conservative baseline for modulating condensing (Mod-Con) boilers. Turndown ratio of 4:1 is deliberately conservative — many units achieve 5:1 or higher. Use a brand-specific profile for more accurate economic evaluation. Override fuel_type to 'propane' if burning LP."
+}
