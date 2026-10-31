@@ -1,6 +1,6 @@
 """System snapshot model representing the live state passed into the evaluator."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from .spaces import SpaceCondition
@@ -23,4 +23,7 @@ class SystemSnapshot:
     outdoor_humidity: float | None = None
     elec_rate_override: float | None = None
     current_hour: int | None = None
-    telemetry: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def telemetry(self) -> dict[str, Any]:
+        return {k: v for k, v in self.__dict__.items() if isinstance(v, int) or isinstance(v, float)}
