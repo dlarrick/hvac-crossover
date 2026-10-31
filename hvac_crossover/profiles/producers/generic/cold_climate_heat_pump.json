@@ -1,7 +1,7 @@
 {
   "make": "Generic",
   "series": "Cold-Climate Multi-Zone Heat Pump (Conservative Baseline)",
-  "model": "generic/cold_climate_heat_pump",
+  "model": "Generic Cold-Climate Mini-Split Heat Pump",
   "producer_type": "inverter_heat_pump",
   "refrigerant": "R410A",
   "max_ports": 4,

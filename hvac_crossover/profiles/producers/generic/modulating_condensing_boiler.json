@@ -1,7 +1,7 @@
 {
   "make": "Generic",
   "series": "Modulating Condensing Boiler (Conservative Baseline)",
-  "model": "generic/modulating_condensing_boiler",
+  "model": "Generic Modulating/Condensing Boiler",
   "producer_type": "modulating_boiler",
   "fuel_type": "natural_gas",
   "nominal_heating_btu": 100000,
