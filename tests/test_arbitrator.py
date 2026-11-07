@@ -132,46 +132,53 @@ class TestArbitratorEngine(unittest.TestCase):
         # Zero conflict explanations generated
         self.assertEqual(len(explanations), 0)
 
-    def test_shared_boiler_zone_master_slave_arbitration(self):
-        # Primary BR (Master) and Guest Room (Slave) share Z2
+    def test_shared_boiler_zone_primary_secondary_arbitration(self):
+        # Primary BR (Primary) and Guest Room (Secondary) share Z2
         primary = Space(
             id="p_br",
             name="Primary BR",
             emitters=[HydronicEmitter(id="p_base", producer_id="boiler", zone_id="z2")],
-            shared_boiler_role=SharedBoilerRole.MASTER,
+            shared_boiler_role=SharedBoilerRole.PRIMARY,
         )
         guest = Space(
             id="g_rm",
             name="Guest Room",
-            emitters=[HydronicEmitter(id="g_base", producer_id="boiler", zone_id="z2")],
-            shared_boiler_role=SharedBoilerRole.SLAVE,
+            emitters=[
+                MiniSplitHead(id="g_head", producer_id="odu1"),
+                HydronicEmitter(id="g_base", producer_id="boiler", zone_id="z2"),
+            ],
+            shared_boiler_role=SharedBoilerRole.SECONDARY,
         )
-        shared_topology = SystemTopology(producers=[self.boiler], spaces=[primary, guest])
+        shared_topology = SystemTopology(producers=[self.boiler, self.odu1], spaces=[primary, guest])
 
-        # Case 1: Guest is unoccupied and calls for heat, Master is satisfied -> Call cancelled
+        # Case 1: Guest calls for heat, Primary is satisfied -> Zone call cancelled
         requested_zones = {("boiler", "z2")}
         conditions = {
             "p_br": SpaceCondition(current_temp=68.0, comfort=ComfortRange(heat_to=68.0)),
-            "g_rm": SpaceCondition(current_temp=60.0, comfort=ComfortRange(heat_to=65.0), occupied=False),
+            "g_rm": SpaceCondition(current_temp=60.0, comfort=ComfortRange(heat_to=65.0)),
         }
-        approved, exp = self.arbitrator.arbitrate_shared_boiler_zones(
+        approved, vetoed, exp = self.arbitrator.arbitrate_shared_boiler_zones(
             requested_boiler_zones=requested_zones,
             topology=shared_topology,
             space_conditions=conditions,
         )
         self.assertNotIn(("boiler", "z2"), approved)
+        self.assertEqual(len(vetoed), 1)
+        self.assertEqual(vetoed[0][0].id, "g_rm")
+        self.assertEqual(vetoed[0][1], ("boiler", "z2"))
 
-        # Case 2: Master calls for heat -> Approved
-        conditions_master_calls = {
+        # Case 2: Primary calls for heat -> Approved
+        conditions_primary_calls = {
             "p_br": SpaceCondition(current_temp=64.0, comfort=ComfortRange(heat_to=68.0)),
-            "g_rm": SpaceCondition(current_temp=60.0, comfort=ComfortRange(heat_to=65.0), occupied=False),
+            "g_rm": SpaceCondition(current_temp=60.0, comfort=ComfortRange(heat_to=65.0)),
         }
-        approved2, exp2 = self.arbitrator.arbitrate_shared_boiler_zones(
-            requested_boiler_zones=requested_zones,
+        approved2, vetoed2, exp2 = self.arbitrator.arbitrate_shared_boiler_zones(
+            requested_boiler_zones={("boiler", "z2")},
             topology=shared_topology,
-            space_conditions=conditions_master_calls,
+            space_conditions=conditions_primary_calls,
         )
         self.assertIn(("boiler", "z2"), approved2)
+        self.assertEqual(len(vetoed2), 0)
 
 
 if __name__ == "__main__":

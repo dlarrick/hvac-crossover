@@ -74,8 +74,8 @@ class SharedBoilerRole(str, Enum):
     """Role in shared hydronic zone arbitration."""
 
     INDEPENDENT = "independent"
-    MASTER = "master"
-    SLAVE = "slave"
+    PRIMARY = "primary"
+    SECONDARY = "secondary"
 
 
 class SystemPhase(str, Enum):

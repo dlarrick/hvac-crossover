@@ -12,7 +12,7 @@ class ArbitratorEngine:
     """
     Enforces hardware physical safety constraints:
     1. Multi-split single-refrigerant mode locks (preventing heat/cool conflict faults).
-    2. Shared hydronic zone valve arbitration (master/slave relationships).
+    2. Shared hydronic zone valve arbitration (primary/secondary relationships).
     3. Window/skylight cutoffs for passive thermal banking.
     """
 
@@ -138,10 +138,24 @@ class ArbitratorEngine:
                     has_other_active_emitter = any(e_id != head.id for e_id in resolved_emitters.get(s.id, []))
 
                 hydronic_emitters = [e for e in s.emitters if isinstance(e, HydronicEmitter)]
+                usable_hydronic = []
+                for e in hydronic_emitters:
+                    shared = topology.get_shared_hydronic_spaces(e.producer_id, e.zone_id)
+                    if len(shared) > 1 and s.shared_boiler_role == SharedBoilerRole.SECONDARY:
+                        primaries = [p for p in shared if p.shared_boiler_role == SharedBoilerRole.PRIMARY]
+                        primary_calling = any(
+                            p.id in space_conditions
+                            and space_conditions[p.id].comfort.demands_heat(space_conditions[p.id].current_temp)
+                            for p in primaries
+                        )
+                        if primary_calling:
+                            usable_hydronic.append(e)
+                    else:
+                        usable_hydronic.append(e)
 
-                if in_recovery and hydronic_emitters:
+                if in_recovery and usable_hydronic:
                     # Space is in deep recovery -> divert to boiler!
-                    h_emitter = hydronic_emitters[0]
+                    h_emitter = usable_hydronic[0]
                     if resolved_emitters is not None:
                         # Remove mini-split heads for this space from candidate emitters
                         resolved_emitters[s.id] = [
@@ -226,12 +240,17 @@ class ArbitratorEngine:
         requested_boiler_zones: set[tuple[str, str]],
         topology: SystemTopology,
         space_conditions: dict[str, SpaceCondition],
-    ) -> tuple[set[tuple[str, str]], list[str]]:
+        candidate_emitters: dict[str, list[str]] | None = None,
+    ) -> tuple[set[tuple[str, str]], list[tuple[Space, tuple[str, str], str]], list[str]]:
         """
         Arbitrates multiple spaces sharing the same boiler zone valve (e.g. Floor 2 Z2).
-        Returns: (approved_boiler_zones, explanation_messages)
+        If the primary space is not calling the shared boiler zone, secondary spaces
+        cannot use it.
+        Returns: (approved_boiler_zones, vetoed_secondary_spaces, explanation_messages)
+        where vetoed_secondary_spaces is a list of (secondary_space, zone_key, primary_name).
         """
         approved_zones = set(requested_boiler_zones)
+        vetoed_secondaries: list[tuple[Space, tuple[str, str], str]] = []
         explanations = []
 
         # Find all unique (boiler_id, zone_id) pairs
@@ -246,29 +265,70 @@ class ArbitratorEngine:
             if len(shared_spaces) <= 1:
                 continue  # Dedicated zone, no arbitration needed
 
-            # Identify Master and Slave spaces
-            masters = [s for s in shared_spaces if s.shared_boiler_role == SharedBoilerRole.MASTER]
-            slaves = [s for s in shared_spaces if s.shared_boiler_role == SharedBoilerRole.SLAVE]
+            # Identify Primary and Secondary spaces
+            primaries = [s for s in shared_spaces if s.shared_boiler_role == SharedBoilerRole.PRIMARY]
+            secondaries = [s for s in shared_spaces if s.shared_boiler_role == SharedBoilerRole.SECONDARY]
 
             zone_key = (boiler_id, zone_id)
             if zone_key not in approved_zones:
                 continue
 
-            # If zone was called by a slave, check if master permits or if slave should float
-            master_calling = any(
-                space_conditions[m.id].comfort.demands_heat(space_conditions[m.id].current_temp)
-                for m in masters
-                if m.id in space_conditions
-            )
+            # Check if any primary space is calling this shared boiler zone
+            if candidate_emitters is not None:
+                primary_calling = any(
+                    (
+                        p.id in space_conditions
+                        and space_conditions[p.id].comfort.demands_heat(space_conditions[p.id].current_temp)
+                        and any(
+                            isinstance(e, HydronicEmitter)
+                            and (e.producer_id, e.zone_id) == zone_key
+                            and e.id in candidate_emitters.get(p.id, [])
+                            for e in p.emitters
+                        )
+                    )
+                    for p in primaries
+                )
+            else:
+                primary_calling = any(
+                    space_conditions[p.id].comfort.demands_heat(space_conditions[p.id].current_temp)
+                    for p in primaries
+                    if p.id in space_conditions
+                )
 
-            if not master_calling and slaves:
-                for slave in slaves:
-                    cond = space_conditions.get(slave.id)
-                    if cond and not cond.occupied:
-                        approved_zones.discard(zone_key)
-                        explanations.append(
-                            f"Shared Zone '{zone_id}' call cancelled: Slave space '{slave.name}' is unoccupied "
-                            f"and master space is satisfied."
+            if not primary_calling:
+                approved_zones.discard(zone_key)
+                primary_name = primaries[0].name if primaries else "Primary space"
+
+                for secondary in secondaries:
+                    had_zone_call = False
+                    if candidate_emitters is not None:
+                        had_zone_call = any(
+                            isinstance(e, HydronicEmitter)
+                            and (e.producer_id, e.zone_id) == zone_key
+                            and e.id in candidate_emitters.get(secondary.id, [])
+                            for e in secondary.emitters
+                        )
+                    else:
+                        had_zone_call = any(
+                            isinstance(e, HydronicEmitter) and (e.producer_id, e.zone_id) == zone_key
+                            for e in secondary.emitters
                         )
 
-        return approved_zones, explanations
+                    if not had_zone_call:
+                        continue
+
+                    # Secondary cannot use this shared zone valve
+                    if candidate_emitters is not None:
+                        candidate_emitters[secondary.id] = [
+                            e_id
+                            for e_id in candidate_emitters.get(secondary.id, [])
+                            if not any(
+                                isinstance(e, HydronicEmitter)
+                                and (e.producer_id, e.zone_id) == zone_key
+                                and e.id == e_id
+                                for e in secondary.emitters
+                            )
+                        ]
+                    vetoed_secondaries.append((secondary, zone_key, primary_name))
+
+        return approved_zones, vetoed_secondaries, explanations

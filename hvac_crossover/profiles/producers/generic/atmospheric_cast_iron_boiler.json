@@ -1,7 +1,7 @@
 {
   "make": "Generic",
   "series": "Atmospheric Cast-Iron Boiler (Conservative Baseline)",
-  "model": "generic/atmospheric_cast_iron_boiler",
+  "model": "Generic Cast-Iron Boiler ",
   "producer_type": "steam_boiler",
   "nominal_heating_btu": 100000,
   "rated_afue": 0.82,

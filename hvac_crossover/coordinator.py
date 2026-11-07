@@ -11,7 +11,7 @@ from .models.enums import HvacAction, HvacMode, ProducerType
 from .models.plan import Diagnostics, DispatchPlan, ProducerDirective, SpaceDirective
 from .models.producers import InverterHeatPumpProducer
 from .models.snapshot import SystemSnapshot
-from .models.spaces import ComfortRange, SpaceCondition
+from .models.spaces import ComfortRange, Space, SpaceCondition
 from .models.tariffs import TariffSchedule
 from .models.topology import SystemTopology
 
@@ -195,31 +195,45 @@ class DualFuelCoordinator:
                                         )
                                         break
 
-        # 4. Multi-Split ODU Mode Conflict Arbitration
+        # 4. Shared Hydronic Zone Valve Arbitration
+        approved_boiler_zones, vetoed_secondaries, boiler_explanations = self.arbitrator.arbitrate_shared_boiler_zones(
+            requested_boiler_zones=requested_boiler_zones,
+            topology=self.topology,
+            space_conditions=snapshot.spaces,
+            candidate_emitters=candidate_emitters,
+        )
+        explanations.extend(boiler_explanations)
+
+        for secondary, zone_key, primary_name in vetoed_secondaries:
+            self._decide_secondary_space_fallback(
+                secondary=secondary,
+                zone_key=zone_key,
+                primary_name=primary_name,
+                snapshot=snapshot,
+                candidate_emitters=candidate_emitters,
+                candidate_space_modes=candidate_space_modes,
+                space_costs=space_costs,
+                space_cops=space_cops,
+                explanations=explanations,
+            )
+
+        # 5. Multi-Split ODU Mode Conflict Arbitration
         if self.config.enforce_odu_mode_locks:
             (
                 resolved_modes,
                 candidate_emitters,
-                requested_boiler_zones,
+                approved_boiler_zones,
                 odu_explanations,
             ) = self.arbitrator.arbitrate_odu_modes(
                 requested_space_modes=candidate_space_modes,
                 topology=self.topology,
                 space_conditions=snapshot.spaces,
                 candidate_emitters=candidate_emitters,
-                requested_boiler_zones=requested_boiler_zones,
+                requested_boiler_zones=approved_boiler_zones,
             )
             explanations.extend(odu_explanations)
         else:
             resolved_modes = candidate_space_modes
-
-        # 5. Shared Hydronic Zone Valve Arbitration
-        approved_boiler_zones, boiler_explanations = self.arbitrator.arbitrate_shared_boiler_zones(
-            requested_boiler_zones=requested_boiler_zones,
-            topology=self.topology,
-            space_conditions=snapshot.spaces,
-        )
-        explanations.extend(boiler_explanations)
 
         # 6. Build Space Directives
         for space in self.topology.spaces:
@@ -322,6 +336,73 @@ class DualFuelCoordinator:
             producer_directives=producer_directives,
             diagnostics=diagnostics,
         )
+
+    def _decide_secondary_space_fallback(
+        self,
+        secondary: Space,
+        zone_key: tuple[str, str],
+        primary_name: str,
+        snapshot: SystemSnapshot,
+        candidate_emitters: dict[str, list[str]],
+        candidate_space_modes: dict[str, HvacMode],
+        space_costs: dict[str, float],
+        space_cops: dict[str, float],
+        explanations: list[str],
+    ) -> None:
+        """
+        Decide and apply alternative heating emitter fallback for a secondary space
+        whose shared boiler zone call was vetoed because the primary space was not calling.
+        """
+        boiler_id, zone_id = zone_key
+        cond = snapshot.spaces.get(secondary.id)
+        if not cond or not cond.comfort.demands_heat(cond.current_temp):
+            if not candidate_emitters.get(secondary.id):
+                candidate_space_modes[secondary.id] = HvacMode.OFF
+            explanations.append(
+                f"Shared hydronic zone '{zone_id}' call cancelled: Secondary space '{secondary.name}' "
+                f"is satisfied and primary space '{primary_name}' is not calling."
+            )
+            return
+
+        load_btu = secondary.estimated_heat_loss_btu_per_hr(cond.current_temp, snapshot.outdoor_temp)
+        ranked = self.economics.rank_space_emitters_by_cost(
+            space=secondary,
+            outdoor_temp_f=snapshot.outdoor_temp,
+            tariffs=snapshot.tariffs,
+            topology=self.topology,
+            load_btu=load_btu,
+            telemetry=snapshot.telemetry,
+            part_load=True,
+            safety_band_f=self.config.heat_pump_min_temp_safety_band_f,
+        )
+        viable_alts = [
+            (unit, cost, eff)
+            for unit, cost, eff in ranked
+            if not (isinstance(unit, HydronicEmitter) and (unit.producer_id, unit.zone_id) == zone_key)
+            and cost != float("inf")
+        ]
+
+        if viable_alts:
+            best_unit, best_cost, best_eff = viable_alts[0]
+            winning_type = type(best_unit)
+            all_of_type = [e for e in secondary.emitters if isinstance(e, winning_type)]
+            candidate_emitters[secondary.id] = [e.id for e in all_of_type]
+            candidate_space_modes[secondary.id] = HvacMode.HEAT
+            space_costs[secondary.id] = round(best_cost, 2)
+            space_cops[secondary.id] = round(best_eff, 2)
+            explanations.append(
+                f"Shared hydronic zone '{zone_id}' call cancelled: Primary space '{primary_name}' "
+                f"is satisfied / not calling. Secondary space '{secondary.name}' falling back to "
+                f"alternative emitter '{best_unit.id}' (delivered cost ${best_cost:.2f}/MMBtu)."
+            )
+        else:
+            if not candidate_emitters.get(secondary.id):
+                candidate_space_modes[secondary.id] = HvacMode.OFF
+            explanations.append(
+                f"Shared hydronic zone '{zone_id}' call cancelled: Primary space '{primary_name}' "
+                f"is satisfied / not calling. Secondary space '{secondary.name}' heating unavailable "
+                f"(no viable alternative emitters within operational limits)."
+            )
 
     def evaluate_conditions(
         self,
