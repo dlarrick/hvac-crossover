@@ -12,7 +12,7 @@
 - **Thermodynamic Break-Even ($COP^*$):** Dynamic marginal delivered cost ranking ($/MMBtu) computed from live electric ($P_{\text{elec}}$) and gas ($P_{\text{gas}}$) utility tariffs against manufacturer multi-point performance curves.
 - **Setback Recovery vs. Plateau Maintenance:** Automatically engages high-capacity boilers for large recovery pulls ($\Delta T \ge 3.0^\circ\text{F}$) while handing off steady-state maintenance ($\Delta T \le 1.0^\circ\text{F}$) to modulating heat pumps in their peak efficiency range.
 - **Refrigerant Mode Arbitrator:** Prevents multi-split outdoor units (ODUs) from faulting due to opposing heat/cool calls across shared-refrigerant indoor heads, safely diverting conflicting calls to alternate heat sources.
-- **Hydronic Shared-Zone Arbitration:** Resolves $N:M$ bedroom baseboard couplings (master/slave arbitration) and supports 1:1 smart radiator valves (TRVs).
+- **Hydronic Shared-Zone Arbitration:** Resolves $N:M$ bedroom baseboard couplings (primary/secondary arbitration) and supports 1:1 smart radiator valves (TRVs).
 - **Boiler Short-Cycling Derating:** Accounts for burner turndown limits and cycling penalties when zone calls drop below minimum boiler firing rates.
 
 ## Installation

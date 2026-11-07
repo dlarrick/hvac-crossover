@@ -51,7 +51,7 @@ class TestDualFuelCoordinator(unittest.TestCase):
             ],
             floor_area_sqft=250,
             priority=10,
-            shared_boiler_role=SharedBoilerRole.MASTER,
+            shared_boiler_role=SharedBoilerRole.PRIMARY,
         )
 
         self.guest_room = Space(
@@ -63,7 +63,7 @@ class TestDualFuelCoordinator(unittest.TestCase):
             ],
             floor_area_sqft=200,
             priority=5,
-            shared_boiler_role=SharedBoilerRole.SLAVE,
+            shared_boiler_role=SharedBoilerRole.SECONDARY,
         )
 
         self.first_floor = Space(
@@ -292,6 +292,68 @@ class TestDualFuelCoordinator(unittest.TestCase):
         self.assertEqual(plan.space_directives["cabin"].hvac_mode, HvacMode.OFF)
         self.assertEqual(plan.space_directives["cabin"].active_delivery_unit_ids, [])
         self.assertFalse(plan.producer_directives["odu_haier"].is_active)
+
+    def test_shared_boiler_zone_secondary_falls_back_to_heat_pump(self):
+        """
+        At 30°F, boiler is economically preferred over heat pump.
+        When Primary BR (Primary) is satisfied, it does not call Z2 on alta150.
+        Guest Room (Secondary) demands heat: it must fall back to its mini-split head (guest_head).
+        """
+        plan = self.coordinator.evaluate_conditions(
+            outdoor_temp=30.0,
+            tariffs=self.tariffs,
+            spaces={
+                "loft": {"current": 68.0, "heat_to": 68.0},
+                "primary_br": {"current": 68.0, "heat_to": 68.0},  # Satisfied
+                "guest_room": {"current": 63.0, "heat_to": 67.0},  # Demands heat
+                "first_floor": {"current": 68.0, "heat_to": 68.0},
+            },
+        )
+        # Z2 should not be active on boiler
+        self.assertNotIn("z2", plan.producer_directives["alta150"].active_zones)
+        # Guest Room falls back to its mini-split head
+        self.assertEqual(plan.space_directives["guest_room"].hvac_mode, HvacMode.HEAT)
+        self.assertEqual(plan.space_directives["guest_room"].active_delivery_unit_ids, ["guest_head"])
+        self.assertTrue(plan.producer_directives["odu2"].is_active)
+        self.assertEqual(plan.producer_directives["odu2"].operational_mode, HvacMode.HEAT)
+
+    def test_shared_boiler_zone_both_spaces_use_boiler_when_primary_calls(self):
+        """
+        At 30°F, when Primary BR calls for heat on Z2, Guest Room also receives Z2.
+        """
+        plan = self.coordinator.evaluate_conditions(
+            outdoor_temp=30.0,
+            tariffs=self.tariffs,
+            spaces={
+                "loft": {"current": 68.0, "heat_to": 68.0},
+                "primary_br": {"current": 64.0, "heat_to": 68.0},  # Demands heat -> calls Z2
+                "guest_room": {"current": 63.0, "heat_to": 67.0},  # Demands heat -> uses Z2
+                "first_floor": {"current": 68.0, "heat_to": 68.0},
+            },
+        )
+        self.assertIn("z2", plan.producer_directives["alta150"].active_zones)
+        self.assertEqual(plan.space_directives["primary_br"].active_delivery_unit_ids, ["master_baseboard"])
+        self.assertEqual(plan.space_directives["guest_room"].active_delivery_unit_ids, ["guest_baseboard"])
+
+    def test_shared_boiler_zone_secondary_hp_locked_out_shuts_off(self):
+        """
+        When outdoor temperature is below heat pump operational safety cutoff (-15°F),
+        and Primary BR is satisfied, Guest Room cannot use the shared boiler zone
+        and its heat pump is locked out -> heating safely shuts off.
+        """
+        plan = self.coordinator.evaluate_conditions(
+            outdoor_temp=-15.0,
+            tariffs=self.tariffs,
+            spaces={
+                "loft": {"current": 68.0, "heat_to": 68.0},
+                "primary_br": {"current": 68.0, "heat_to": 68.0},  # Satisfied
+                "guest_room": {"current": 63.0, "heat_to": 67.0},  # Demands heat
+                "first_floor": {"current": 68.0, "heat_to": 68.0},
+            },
+        )
+        self.assertNotIn("z2", plan.producer_directives["alta150"].active_zones)
+        self.assertEqual(plan.space_directives["guest_room"].hvac_mode, HvacMode.OFF)
+        self.assertEqual(plan.space_directives["guest_room"].active_delivery_unit_ids, [])
 
 
 if __name__ == "__main__":
