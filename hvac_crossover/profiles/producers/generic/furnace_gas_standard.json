@@ -1,0 +1,9 @@
+{
+  "make": "Generic",
+  "series": "Standard Warm-Air Furnace (Gas/LP)",
+  "model": "Generic 80% AFUE Furnace (Gas/LP)",
+  "producer_type": "furnace",
+  "fuel_type": "natural_gas",
+  "rated_afue": 0.80,
+  "_note": "Standard 80% AFUE central ducted warm-air furnace. Natural gas or propane compatible."
+}

@@ -25,20 +25,22 @@ pip install hvac-crossover
 
 ```python
 from hvac_crossover import (
-    ProducerProfileFactory, Space, MiniSplitHead, HydronicEmitter,
-    SystemTopology, TariffSchedule, DualFuelCoordinator, ComfortRange
+    ProducerProfileFactory,
+    Space,
+    MiniSplitHead,
+    HydronicEmitter,
+    SystemTopology,
+    TariffSchedule,
+    DualFuelCoordinator,
+    ComfortRange,
 )
 
 # 1. Define Equipment Topology
 odu = ProducerProfileFactory.load_from_json(
-    "profiles/producers/mitsubishi/mxz_3c30nahz2.json",
-    producer_id="odu1",
-    name="Mitsubishi 30k ODU"
+    "profiles/producers/mitsubishi/mxz_xcxxnahz2.json", producer_id="odu1", name="Mitsubishi 30k ODU"
 )
 boiler = ProducerProfileFactory.load_from_json(
-    "profiles/producers/burnham/alta_150.json",
-    producer_id="alta150",
-    name="Burnham Alta 150"
+    "profiles/producers/burnham/alta.json", producer_id="alta150", name="Burnham Alta 150"
 )
 
 loft = Space(
@@ -57,9 +59,7 @@ coordinator = DualFuelCoordinator(topology)
 plan = coordinator.evaluate_conditions(
     outdoor_temp=36.0,
     tariffs=TariffSchedule(gas_cost_per_therm=1.88, electric_cost_per_kwh=0.25),
-    spaces={
-        "loft": {"current": 66.5, "heat_to": 68.0, "cool_to": 74.0}
-    }
+    spaces={"loft": {"current": 66.5, "heat_to": 68.0, "cool_to": 74.0}},
 )
 
 directive = plan.space_directives["loft"]

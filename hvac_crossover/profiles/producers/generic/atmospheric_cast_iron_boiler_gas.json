@@ -1,0 +1,9 @@
+{
+  "make": "Generic",
+  "series": "Atmospheric Cast-Iron Hot Water Boiler (Gas/LP)",
+  "model": "Generic Cast-Iron Hydronic Boiler (Gas/LP)",
+  "producer_type": "atmospheric_boiler",
+  "fuel_type": "natural_gas",
+  "rated_afue": 0.83,
+  "_note": "Standard draft atmospheric cast-iron hot water boiler (e.g. Burnham Series 2, Weil-McLain CGi). High-temperature non-condensing (180/160°F) operation at 83% AFUE. Compatible with natural gas or propane via field orifice conversion."
+}

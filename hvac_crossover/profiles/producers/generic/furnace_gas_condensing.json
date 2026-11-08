@@ -1,0 +1,9 @@
+{
+  "make": "Generic",
+  "series": "High-Efficiency Condensing Furnace (Gas/LP)",
+  "model": "Generic 95% AFUE Condensing Furnace (Gas/LP)",
+  "producer_type": "furnace",
+  "fuel_type": "natural_gas",
+  "rated_afue": 0.95,
+  "_note": "High-efficiency condensing warm-air furnace with secondary condensing heat exchanger operating at 95% AFUE. Natural gas or propane compatible."
+}

@@ -1,0 +1,26 @@
+{
+  "make": "Mitsubishi Electric",
+  "series": "Multi-Zone Hyper-Heating (H2i)",
+  "model": "MXZ-xCxxNAHZ2",
+  "producer_type": "inverter_heat_pump",
+  "min_operational_temp_f": -13.0,
+  "heating_performance": {
+    "full_load_cop": {
+      "47": 3.30,
+      "17": 2.00,
+      "5": 1.95,
+      "-13": 1.75
+    },
+    "part_load_cop": {
+      "47": 4.00,
+      "17": 2.65,
+      "5": 2.30
+    },
+    "capacity_percentage": {
+      "47": 100.0,
+      "17": 100.0,
+      "5": 100.0,
+      "-13": 74.8
+    }
+  }
+}

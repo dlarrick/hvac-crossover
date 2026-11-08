@@ -1,9 +1,43 @@
-"""Terminal delivery units (Mini-split heads, baseboard loops, radiators, TRVs)."""
+"""Terminal delivery units (Mini-split heads, baseboard loops, radiators, TRVs, air handlers)."""
 
 from abc import ABC
 from dataclasses import dataclass
+from typing import Any
 
 from .enums import EmitterType
+
+HYDRONIC_EMITTER_CHARACTERISTICS: dict[EmitterType, dict[str, Any]] = {
+    EmitterType.FIN_TUBE_BASEBOARD: {
+        "design_water_temp_f": 160.0,
+        "design_delta_t_f": 20.0,
+        "design_gpm": 3.5,
+        "odr_temp_range": (180.0, 120.0),  # at 0°F -> 65°F outdoor
+    },
+    EmitterType.CAST_IRON_RADIATOR: {
+        "design_water_temp_f": 150.0,
+        "design_delta_t_f": 20.0,
+        "design_gpm": 3.5,
+        "odr_temp_range": (160.0, 110.0),
+    },
+    EmitterType.IN_FLOOR_RADIANT: {
+        "design_water_temp_f": 110.0,
+        "design_delta_t_f": 10.0,
+        "design_gpm": 4.5,
+        "odr_temp_range": (110.0, 85.0),
+    },
+    EmitterType.KICKSPACE: {
+        "design_water_temp_f": 140.0,
+        "design_delta_t_f": 15.0,
+        "design_gpm": 3.0,
+        "odr_temp_range": (150.0, 115.0),
+    },
+    EmitterType.HYDRO_AIR: {
+        "design_water_temp_f": 130.0,
+        "design_delta_t_f": 25.0,
+        "design_gpm": 4.0,
+        "odr_temp_range": (140.0, 110.0),
+    },
+}
 
 
 @dataclass(kw_only=True)
@@ -46,13 +80,35 @@ class MiniSplitHead(DeliveryUnit):
 @dataclass(kw_only=True)
 class HydronicEmitter(DeliveryUnit):
     """
-    Hydronic water loop emitter (fin-tube baseboard, cast-iron radiator, in-floor radiant).
+    Hydronic water loop emitter (fin-tube baseboard, cast-iron radiator, in-floor radiant, etc.).
     Connected to a central boiler producer via a shared or dedicated zone valve.
     """
 
     emitter_type: EmitterType = EmitterType.FIN_TUBE_BASEBOARD
     zone_id: str = "z1"
-    design_water_temp_f: float = 180.0
+    design_water_temp_f: float = 160.0
+    design_delta_t_f: float = 20.0
+    design_gpm: float = 3.5
+
+    def __post_init__(self) -> None:
+        if self.emitter_type in HYDRONIC_EMITTER_CHARACTERISTICS:
+            specs = HYDRONIC_EMITTER_CHARACTERISTICS[self.emitter_type]
+            if self.design_water_temp_f == 160.0 and self.emitter_type != EmitterType.FIN_TUBE_BASEBOARD:
+                self.design_water_temp_f = specs["design_water_temp_f"]
+            if self.design_delta_t_f == 20.0 and self.emitter_type != EmitterType.FIN_TUBE_BASEBOARD:
+                self.design_delta_t_f = specs["design_delta_t_f"]
+            if self.design_gpm == 3.5 and self.emitter_type != EmitterType.FIN_TUBE_BASEBOARD:
+                self.design_gpm = specs["design_gpm"]
+
+
+@dataclass(kw_only=True)
+class FurnaceRegister(DeliveryUnit):
+    """
+    Central ducted warm-air supply register or zone.
+    Connected to a central FurnaceProducer.
+    """
+
+    emitter_type: EmitterType = EmitterType.DUCTED_AIR_HANDLER
 
 
 @dataclass(kw_only=True)

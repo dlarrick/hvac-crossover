@@ -1,0 +1,10 @@
+{
+  "make": "Generic",
+  "series": "Atmospheric Steam Boiler (Oil)",
+  "model": "Generic Steam Boiler (Oil)",
+  "producer_type": "steam_boiler",
+  "fuel_type": "oil",
+  "rated_afue": 0.82,
+  "min_run_time_minutes": 20,
+  "_note": "Fixed-fire oil-fired cast iron steam boiler burning #2 fuel oil at 82% AFUE. Enforces minimum 20-minute steaming cycles."
+}

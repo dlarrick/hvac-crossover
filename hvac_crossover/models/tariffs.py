@@ -70,6 +70,12 @@ class TariffSchedule:
         return self.propane_cost_per_gal / 0.0915 if self.propane_cost_per_gal > 0 else 0.0
 
     @property
+    def oil_cost_per_mmbtu_input(self) -> float:
+        """Cost per 1,000,000 BTU of raw heating oil (#2 fuel oil) input (before burner efficiency)."""
+        # 1 gallon #2 fuel oil = ~138,500 BTU = 0.1385 MMBtu
+        return self.oil_cost_per_gal / 0.1385 if self.oil_cost_per_gal > 0 else 0.0
+
+    @property
     def electric_cost_per_mmbtu_input(self) -> float:
         """Cost per 1,000,000 BTU of raw electric resistance heat (COP = 1.0)."""
         return self.elec_cost_per_kwh / 0.0034121416

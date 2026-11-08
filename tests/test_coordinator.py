@@ -22,13 +22,13 @@ class TestDualFuelCoordinator(unittest.TestCase):
     def setUp(self):
         # Setup Doug's exact Victorian hardware topology
         self.odu1 = ProducerProfileFactory.load_from_json(
-            "hvac_crossover/profiles/producers/mitsubishi/mxz_3c30nahz2.json", "odu1"
+            "hvac_crossover/profiles/producers/mitsubishi/mxz_xcxxnahz2.json", "odu1"
         )
         self.odu2 = ProducerProfileFactory.load_from_json(
-            "hvac_crossover/profiles/producers/mitsubishi/mxz_2d20nlhz.json", "odu2"
+            "hvac_crossover/profiles/producers/mitsubishi/mxz_xdxxnlhz.json", "odu2"
         )
         self.boiler = ProducerProfileFactory.load_from_json(
-            "hvac_crossover/profiles/producers/burnham/alta_150.json", "alta150"
+            "hvac_crossover/profiles/producers/burnham/alta.json", "alta150"
         )
 
         self.loft = Space(
@@ -239,8 +239,8 @@ class TestDualFuelCoordinator(unittest.TestCase):
         When outdoor temp is below the heat pump operational envelope + safety band,
         the heat pump is locked out and heating falls back to hydronics.
         """
-        haier = ProducerProfileFactory.load_from_json("haier/3u24ms2vhb.json", "odu_haier")
-        boiler = ProducerProfileFactory.load_from_json("bradford_white/bwmfthw140p.json", "bw_boiler")
+        haier = ProducerProfileFactory.load_from_json("haier/xuxxms2vhb.json", "odu_haier")
+        boiler = ProducerProfileFactory.load_from_json("bradford_white/bmfthw.json", "bw_boiler")
         condo = Space(
             id="condo",
             name="Condo",
@@ -272,7 +272,7 @@ class TestDualFuelCoordinator(unittest.TestCase):
         When outdoor temp is below envelope + safety band and space has only heat pump,
         heating is safely disabled.
         """
-        haier = ProducerProfileFactory.load_from_json("haier/3u24ms2vhb.json", "odu_haier")
+        haier = ProducerProfileFactory.load_from_json("haier/xuxxms2vhb.json", "odu_haier")
         space = Space(
             id="cabin",
             name="Cabin",
