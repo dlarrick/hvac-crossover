@@ -43,6 +43,8 @@ class EmitterType(str, Enum):
     FIN_TUBE_BASEBOARD = "fin_tube_baseboard"
     CAST_IRON_RADIATOR = "cast_iron_radiator"
     IN_FLOOR_RADIANT = "in_floor_radiant"
+    KICKSPACE = "kickspace"
+    HYDRO_AIR = "hydro_air"
     TRV = "smart_radiator_valve"
 
 

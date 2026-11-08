@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from ..models.delivery import DeliveryUnit, MiniSplitHead
+from ..models.delivery import DeliveryUnit, HydronicEmitter, MiniSplitHead
 from ..models.enums import FuelType
 from ..models.producers import InverterHeatPumpProducer, ModulatingBoilerProducer, Producer
 from ..models.spaces import Space
@@ -42,6 +42,10 @@ class EconomicsEngine:
             # 1 gal propane = 91,500 BTU
             return (91500.0 / 3412.1416) * boiler_eff * (elec_cost / tariffs.propane_cost_per_gal)
 
+        if fuel_type == FuelType.OIL and tariffs.oil_cost_per_gal > 0:
+            # 1 gal #2 fuel oil = 138,500 BTU
+            return (138500.0 / 3412.1416) * boiler_eff * (elec_cost / tariffs.oil_cost_per_gal)
+
         # Natural gas (1 therm = 100,000 BTU)
         return (100000.0 / 3412.1416) * boiler_eff * (elec_cost / tariffs.gas_cost_per_therm)
 
@@ -52,7 +56,7 @@ class EconomicsEngine:
         boiler: Producer,
         load_btu: float | None = None,
         telemetry: dict[str, Any] | None = None,
-        part_load: bool = False,
+        part_load: bool = True,
         temp_bounds: tuple[float, float] = (-15.0, 65.0),
     ) -> float | None:
         """
@@ -87,7 +91,7 @@ class EconomicsEngine:
         topology: SystemTopology,
         load_btu: float | None = None,
         telemetry: dict[str, Any] | None = None,
-        part_load: bool = False,
+        part_load: bool = True,
         safety_band_f: float = 5.0,
     ) -> tuple[float, float]:
         """
@@ -114,12 +118,24 @@ class EconomicsEngine:
 
         elif isinstance(producer, ModulatingBoilerProducer):
             return_temp = telemetry.get("boiler_return_temp") if telemetry else None
+            calc_telemetry = dict(telemetry) if telemetry else {}
+            if return_temp is None:
+                active_ems = calc_telemetry.get("active_emitters")
+                if active_ems is None and isinstance(delivery_unit, HydronicEmitter):
+                    active_ems = [delivery_unit]
+                if active_ems:
+                    return_temp = producer.estimate_return_temperature(
+                        active_emitters=active_ems,
+                        outdoor_temp_f=outdoor_temp_f,
+                    )
+                    calc_telemetry["boiler_return_temp"] = return_temp
+
             eff = producer.efficiency_at(load_btu=load_btu, return_water_temp_f=return_temp)
             cost_mmbtu = producer.delivered_cost_per_mmbtu(
                 outdoor_temp_f=outdoor_temp_f,
                 tariffs=tariffs,
                 load_btu=load_btu,
-                telemetry=telemetry,
+                telemetry=calc_telemetry,
                 part_load=part_load,
             )
             return cost_mmbtu, eff
@@ -146,7 +162,7 @@ class EconomicsEngine:
         topology: SystemTopology,
         load_btu: float | None = None,
         telemetry: dict[str, Any] | None = None,
-        part_load: bool = False,
+        part_load: bool = True,
         safety_band_f: float = 5.0,
     ) -> list[tuple[DeliveryUnit, float, float]]:
         """

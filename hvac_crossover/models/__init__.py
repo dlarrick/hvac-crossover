@@ -1,7 +1,9 @@
 """Domain models and data structures for hybrid_hvac."""
 
 from .delivery import (
+    HYDRONIC_EMITTER_CHARACTERISTICS,
     DeliveryUnit,
+    FurnaceRegister,
     HydronicEmitter,
     MiniSplitHead,
     SmartRadiatorValve,
@@ -24,6 +26,8 @@ from .plan import (
     SpaceDirective,
 )
 from .producers import (
+    AtmosphericBoilerProducer,
+    FurnaceProducer,
     InverterHeatPumpProducer,
     ModulatingBoilerProducer,
     Producer,
@@ -53,12 +57,16 @@ __all__ = [
     "Producer",
     "InverterHeatPumpProducer",
     "ModulatingBoilerProducer",
+    "AtmosphericBoilerProducer",
     "SteamBoilerProducer",
+    "FurnaceProducer",
     "ProducerProfileFactory",
     "DeliveryUnit",
     "MiniSplitHead",
     "HydronicEmitter",
+    "FurnaceRegister",
     "SmartRadiatorValve",
+    "HYDRONIC_EMITTER_CHARACTERISTICS",
     "ComfortRange",
     "Space",
     "SpaceCondition",

@@ -19,20 +19,20 @@ hvac-crossover/
 │   │   └── recovery.py             # Setback recovery vs. plateau maintenance detection
 │   ├── models/                     # Core domain models
 │   │   ├── __init__.py
-│   │   ├── delivery.py             # DeliveryUnit, MiniSplitHead, HydronicEmitter, CentralAirHandler
+│   │   ├── delivery.py             # DeliveryUnit, MiniSplitHead, HydronicEmitter, FurnaceRegister
 │   │   ├── directives.py           # SpaceDirective, ProducerDirective, DispatchPlan, Diagnostics
 │   │   ├── enums.py                # HvacMode, HvacAction, SharedBoilerRole, ProducerType, etc.
-│   │   ├── producers.py            # Producer base & subclasses, ProducerProfileFactory
+│   │   ├── producers.py            # Producer base & subclasses (Inverter HP, Mod-Con Boiler, Atmospheric Boiler, Steam Boiler, Furnace), ProducerProfileFactory
 │   │   ├── spaces.py               # Space, SpaceCondition, ComfortRange
-│   │   ├── tariffs.py              # TariffSchedule (electric, gas, propane rate math)
+│   │   ├── tariffs.py              # TariffSchedule (electric, gas, propane, oil rate math)
 │   │   └── topology.py             # SystemTopology (graph of producers, emitters, spaces)
 │   └── profiles/                   # Manufacturer & generic equipment performance profiles (JSON)
 │       └── producers/
-│           ├── bradford_white/     # Brute condensing boilers
-│           ├── burnham/            # Alta condensing boilers
-│           ├── generic/            # Cold-climate HP, standard HP, mod-con boiler, cast-iron boiler
-│           ├── haier/              # Multi-split ODUs
-│           └── mitsubishi/         # Hyper-Heat ODUs
+│           ├── bradford_white/     # Brute FT condensing boilers (bmfthw.json)
+│           ├── burnham/            # Alta condensing boilers (alta.json)
+│           ├── generic/            # Cold-climate HP, standard HP, mod-con boiler, atmospheric boiler, steam boiler, furnace
+│           ├── haier/              # FlexFit multi-split ODUs (xuxxms2vhb.json)
+│           └── mitsubishi/         # Hyper-Heat ODUs (mxz_xcxxnahz2.json, mxz_xdxxnlhz.json)
 ├── tests/                          # Complete unit test suite
 │   ├── test_arbitrator.py          # ODU mode locking, shared-zone fallback arbitration
 │   ├── test_comfort_range.py       # Deadband, heating/cooling deficits, float logic
@@ -81,6 +81,7 @@ python3 -m unittest discover -s tests
 
 ### Versioning
 * Version is defined in `pyproject.toml` (`project.version`) and `hvac_crossover/__init__.py` (`__version__`).
+* Always update the matching dependency version pin under `"requirements"` in `/home/doug/Projects/hvac-fusion/custom_components/hvac_fusion/manifest.json`.
 * When updating `hvac-crossover`, bump the version and reinstall in editable mode into the consumer environment:
   ```bash
   pip install -e /home/doug/Projects/hvac-crossover

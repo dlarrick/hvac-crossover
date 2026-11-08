@@ -7,12 +7,16 @@ from .config import CoordinatorConfig
 from .coordinator import DualFuelCoordinator
 from .engines import ArbitratorEngine, EconomicsEngine, RecoveryEngine
 from .models import (
+    HYDRONIC_EMITTER_CHARACTERISTICS,
+    AtmosphericBoilerProducer,
     ComfortRange,
     DeliveryUnit,
     Diagnostics,
     DispatchPlan,
     EmitterType,
     FuelType,
+    FurnaceProducer,
+    FurnaceRegister,
     HvacAction,
     HvacMode,
     HydronicEmitter,
@@ -37,7 +41,7 @@ from .models import (
     ThermalProfile,
 )
 
-__version__ = "0.1.6"
+__version__ = "0.1.7"
 __all__ = [
     "CoordinatorConfig",
     "DualFuelCoordinator",
@@ -57,12 +61,16 @@ __all__ = [
     "Producer",
     "InverterHeatPumpProducer",
     "ModulatingBoilerProducer",
+    "AtmosphericBoilerProducer",
     "SteamBoilerProducer",
+    "FurnaceProducer",
     "ProducerProfileFactory",
     "DeliveryUnit",
     "MiniSplitHead",
     "HydronicEmitter",
+    "FurnaceRegister",
     "SmartRadiatorValve",
+    "HYDRONIC_EMITTER_CHARACTERISTICS",
     "ComfortRange",
     "Space",
     "SpaceCondition",

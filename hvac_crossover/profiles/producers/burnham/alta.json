@@ -1,12 +1,9 @@
 {
   "make": "Burnham (U.S. Boiler Company)",
   "series": "Alta Modulating Condensing",
-  "model": "Alta 150",
-  "vintage": 2026,
+  "model": "Alta",
   "producer_type": "modulating_boiler",
   "fuel_type": "natural_gas",
-  "nominal_heating_btu": 150000,
-  "min_fire_btu": 20000,
   "turndown_ratio": 7.5,
   "rated_afue": 0.95
 }

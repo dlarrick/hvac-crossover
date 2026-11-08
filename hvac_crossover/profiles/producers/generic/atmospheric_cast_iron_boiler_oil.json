@@ -1,0 +1,9 @@
+{
+  "make": "Generic",
+  "series": "Atmospheric Cast-Iron Hot Water Boiler (Oil)",
+  "model": "Generic Cast-Iron Hydronic Boiler (Oil)",
+  "producer_type": "atmospheric_boiler",
+  "fuel_type": "oil",
+  "rated_afue": 0.85,
+  "_note": "Standard oil-fired cast-iron hot water boiler with power burner (e.g. Beckett AFG). High-temperature non-condensing (180/160°F) operation at 85% AFUE burning #2 fuel oil."
+}

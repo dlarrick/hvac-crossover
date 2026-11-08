@@ -1,0 +1,9 @@
+{
+  "make": "Generic",
+  "series": "Oil Warm-Air Furnace",
+  "model": "Generic 83% AFUE Oil Furnace",
+  "producer_type": "furnace",
+  "fuel_type": "oil",
+  "rated_afue": 0.83,
+  "_note": "Standard oil-fired warm-air furnace with power burner burning #2 fuel oil at 83% AFUE."
+}

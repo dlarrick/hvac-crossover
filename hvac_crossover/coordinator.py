@@ -9,7 +9,7 @@ from .engines.recovery import RecoveryEngine
 from .models.delivery import HydronicEmitter, MiniSplitHead
 from .models.enums import HvacAction, HvacMode, ProducerType
 from .models.plan import Diagnostics, DispatchPlan, ProducerDirective, SpaceDirective
-from .models.producers import InverterHeatPumpProducer
+from .models.producers import InverterHeatPumpProducer, ModulatingBoilerProducer
 from .models.snapshot import SystemSnapshot
 from .models.spaces import ComfortRange, Space, SpaceCondition
 from .models.tariffs import TariffSchedule
@@ -310,24 +310,82 @@ class DualFuelCoordinator:
                     operational_mode=odu_mode,
                     is_active=is_active,
                 )
-            else:
-                # Boiler / Furnace producer
+            elif isinstance(producer, ModulatingBoilerProducer):
                 active_zones = [zone_id for b_id, zone_id in approved_boiler_zones if b_id == producer.id]
                 is_active = len(active_zones) > 0
+
+                active_ems = []
+                for s in self.topology.get_spaces_for_producer(producer.id):
+                    s_dir = space_directives.get(s.id)
+                    if not s_dir or s_dir.hvac_mode == HvacMode.OFF:
+                        continue
+                    for e in s.emitters:
+                        if (
+                            isinstance(e, HydronicEmitter)
+                            and e.producer_id == producer.id
+                            and e.id in s_dir.active_delivery_unit_ids
+                        ):
+                            active_ems.append(e)
+
+                measured_return = snapshot.telemetry.get("boiler_return_temp") if snapshot.telemetry else None
+                if measured_return is not None:
+                    ret_temp = float(measured_return)
+                else:
+                    ret_temp = producer.estimate_return_temperature(
+                        active_emitters=active_ems if is_active else None,
+                        outdoor_temp_f=snapshot.outdoor_temp,
+                    )
+                eff = producer.efficiency_at(return_water_temp_f=ret_temp)
+                state = producer.condensing_state(ret_temp)
+
                 producer_directives[producer.id] = ProducerDirective(
                     producer_id=producer.id,
                     operational_mode=HvacMode.HEAT if is_active else HvacMode.OFF,
                     is_active=is_active,
                     active_zones=active_zones,
+                    estimated_return_temp_f=round(ret_temp, 1),
+                    estimated_efficiency=round(eff, 3),
+                    condensing_state=state,
+                )
+            else:
+                # Atmospheric Boiler / Steam Boiler / Furnace producer
+                active_zones = [zone_id for b_id, zone_id in approved_boiler_zones if b_id == producer.id]
+                is_active = len(active_zones) > 0
+                eff = getattr(producer, "rated_afue", 0.80)
+                producer_directives[producer.id] = ProducerDirective(
+                    producer_id=producer.id,
+                    operational_mode=HvacMode.HEAT if is_active else HvacMode.OFF,
+                    is_active=is_active,
+                    active_zones=active_zones,
+                    estimated_efficiency=round(eff, 3),
                 )
 
         # 8. Assemble Diagnostics
+        boiler_return_temps = {
+            p_id: p_dir.estimated_return_temp_f
+            for p_id, p_dir in producer_directives.items()
+            if p_dir.estimated_return_temp_f is not None
+        }
+        boiler_efficiencies = {
+            p_id: p_dir.estimated_efficiency
+            for p_id, p_dir in producer_directives.items()
+            if p_dir.estimated_efficiency is not None
+        }
+        boiler_condensing_states = {
+            p_id: p_dir.condensing_state
+            for p_id, p_dir in producer_directives.items()
+            if p_dir.condensing_state is not None
+        }
+
         diagnostics = Diagnostics(
             economic_crossover_temp=round(crossover_temp, 1),
             system_phase=system_phase,
             odu_modes=odu_operational_modes,
             space_costs_per_mmbtu=space_costs,
             space_cops=space_cops,
+            boiler_return_temps=boiler_return_temps,
+            boiler_efficiencies=boiler_efficiencies,
+            boiler_condensing_states=boiler_condensing_states,
             explanations=explanations,
         )
 
