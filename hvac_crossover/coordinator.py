@@ -247,11 +247,21 @@ class DualFuelCoordinator:
                 final_mode = HvacMode.OFF
                 emitter_ids = []
             elif final_mode == HvacMode.HEAT:
-                action = HvacAction.HEATING
+                if cond and cond.comfort.is_satisfied_heating(
+                    cond.current_temp, self.config.deadband_maintenance_buffer_f
+                ):
+                    action = HvacAction.IDLE
+                else:
+                    action = HvacAction.HEATING
             elif final_mode in (HvacMode.COOL, HvacMode.DRY):
-                action = HvacAction.COOLING
+                if cond and cond.comfort.is_satisfied_cooling(
+                    cond.current_temp, self.config.deadband_maintenance_buffer_f
+                ):
+                    action = HvacAction.IDLE
+                else:
+                    action = HvacAction.COOLING
             else:
-                action = HvacAction.IDLE if cond and cond.comfort.is_in_deadband(cond.current_temp) else HvacAction.OFF
+                action = HvacAction.OFF
 
             # Resolve primary producer from first active emitter
             active_producer_id = None

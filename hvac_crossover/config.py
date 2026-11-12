@@ -31,3 +31,7 @@ class CoordinatorConfig:
     passive_ventilation_override: bool = True  # Open window/skylight forces space delivery units to OFF
     enforce_odu_mode_locks: bool = True  # Enforce single-refrigerant mode lock across heads on same ODU
     short_cycling_protection: bool = True  # Apply burner cycling derate when load is below boiler min fire
+
+    # Setpoint Plateau Maintenance
+    # Degrees in °F inside comfort boundary where an inverter head maintains plateau rather than idling
+    deadband_maintenance_buffer_f: float = 0.5
