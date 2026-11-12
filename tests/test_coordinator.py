@@ -121,6 +121,10 @@ class TestDualFuelCoordinator(unittest.TestCase):
         self.assertEqual(len(plan.producer_directives["alta150"].active_zones), 0)
         # Primary bedroom uses mini-split head at high COP
         self.assertEqual(plan.space_directives["primary_br"].active_delivery_unit_ids, ["master_head"])
+        self.assertEqual(plan.space_directives["primary_br"].action, HvacAction.HEATING)
+        # Guest room is satisfied in deadband (63°F vs 60°F): action is idle
+        self.assertEqual(plan.space_directives["guest_room"].action, HvacAction.IDLE)
+        self.assertEqual(plan.space_directives["guest_room"].explanation, "Mode: heat, Action: idle")
         self.assertEqual(plan.producer_directives["odu1"].operational_mode, HvacMode.HEAT)
 
     def test_passive_ventilation_shuts_off_space(self):
@@ -354,6 +358,67 @@ class TestDualFuelCoordinator(unittest.TestCase):
         self.assertNotIn("z2", plan.producer_directives["alta150"].active_zones)
         self.assertEqual(plan.space_directives["guest_room"].hvac_mode, HvacMode.OFF)
         self.assertEqual(plan.space_directives["guest_room"].active_delivery_unit_ids, [])
+
+    def test_deadband_maintenance_buffer_heating_and_cooling(self):
+        """
+        Verify that within 0.5°F inside the deadband boundary, active mode maintains plateau,
+        and transitions to IDLE once cleared by >= 0.5°F.
+        """
+        # 1. Heating: at 60.2°F with heat_to 60.0°F, within 0.5°F buffer -> HEATING
+        plan = self.coordinator.evaluate_conditions(
+            outdoor_temp=50.0,
+            tariffs=self.tariffs,
+            spaces={
+                "loft": {"current": 68.0, "heat_to": 68.0},
+                "primary_br": {"current": 68.0, "heat_to": 68.0},
+                "guest_room": {"current": 60.2, "heat_to": 60.0},
+                "first_floor": {"current": 68.0, "heat_to": 68.0},
+            },
+        )
+        self.assertEqual(plan.space_directives["guest_room"].action, HvacAction.HEATING)
+        self.assertEqual(plan.space_directives["guest_room"].explanation, "Mode: heat, Action: heating")
+
+        # 2. Heating: at 60.5°F with heat_to 60.0°F, cleared 0.5°F buffer -> IDLE
+        plan = self.coordinator.evaluate_conditions(
+            outdoor_temp=50.0,
+            tariffs=self.tariffs,
+            spaces={
+                "loft": {"current": 68.0, "heat_to": 68.0},
+                "primary_br": {"current": 68.0, "heat_to": 68.0},
+                "guest_room": {"current": 60.5, "heat_to": 60.0},
+                "first_floor": {"current": 68.0, "heat_to": 68.0},
+            },
+        )
+        self.assertEqual(plan.space_directives["guest_room"].action, HvacAction.IDLE)
+        self.assertEqual(plan.space_directives["guest_room"].explanation, "Mode: heat, Action: idle")
+
+        # 3. Cooling: at 76.8°F with cool_to 77.0°F, within 0.5°F buffer -> COOLING
+        plan = self.coordinator.evaluate_conditions(
+            outdoor_temp=85.0,
+            tariffs=self.tariffs,
+            spaces={
+                "loft": {"current": 72.0, "cool_to": 75.0},
+                "primary_br": {"current": 72.0, "cool_to": 75.0},
+                "guest_room": {"current": 76.8, "cool_to": 77.0},
+                "first_floor": {"current": 72.0, "cool_to": 75.0},
+            },
+        )
+        self.assertEqual(plan.space_directives["guest_room"].action, HvacAction.COOLING)
+        self.assertEqual(plan.space_directives["guest_room"].explanation, "Mode: cool, Action: cooling")
+
+        # 4. Cooling: at 76.5°F with cool_to 77.0°F, cleared 0.5°F buffer -> IDLE
+        plan = self.coordinator.evaluate_conditions(
+            outdoor_temp=85.0,
+            tariffs=self.tariffs,
+            spaces={
+                "loft": {"current": 72.0, "cool_to": 75.0},
+                "primary_br": {"current": 72.0, "cool_to": 75.0},
+                "guest_room": {"current": 76.5, "cool_to": 77.0},
+                "first_floor": {"current": 72.0, "cool_to": 75.0},
+            },
+        )
+        self.assertEqual(plan.space_directives["guest_room"].action, HvacAction.IDLE)
+        self.assertEqual(plan.space_directives["guest_room"].explanation, "Mode: cool, Action: idle")
 
 
 if __name__ == "__main__":

@@ -30,6 +30,18 @@ class ComfortRange:
         """True if current temperature sits comfortably inside the deadband (zero energy needed)."""
         return not self.demands_heat(current_temp) and not self.demands_cool(current_temp)
 
+    def is_satisfied_heating(self, current_temp: float, buffer: float = 0.5) -> bool:
+        """True if current temperature has cleared the heating maintenance buffer."""
+        if self.heat_to is None:
+            return True
+        return current_temp >= self.heat_to + buffer
+
+    def is_satisfied_cooling(self, current_temp: float, buffer: float = 0.5) -> bool:
+        """True if current temperature has cleared the cooling maintenance buffer."""
+        if self.cool_to is None:
+            return True
+        return current_temp <= self.cool_to - buffer
+
     def heat_deficit(self, current_temp: float) -> float:
         """Returns degrees below heating setpoint, or 0.0."""
         if self.heat_to is not None:
