@@ -41,6 +41,7 @@ class Diagnostics:
     odu_modes: dict[str, str] = field(default_factory=dict)
     space_costs_per_mmbtu: dict[str, float] = field(default_factory=dict)
     space_cops: dict[str, float] = field(default_factory=dict)
+    space_crossover_temps: dict[str, float] = field(default_factory=dict)
     boiler_return_temps: dict[str, float] = field(default_factory=dict)
     boiler_efficiencies: dict[str, float] = field(default_factory=dict)
     boiler_condensing_states: dict[str, str] = field(default_factory=dict)

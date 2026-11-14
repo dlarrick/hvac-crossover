@@ -79,9 +79,26 @@ class DualFuelCoordinator:
 
         space_costs: dict[str, float] = {}
         space_cops: dict[str, float] = {}
+        space_crossover_temps: dict[str, float] = {}
 
         for space in self.topology.spaces:
             cond = snapshot.spaces.get(space.id)
+            indoor_ref = 68.0
+            if cond is not None:
+                if cond.comfort.heat_to is not None:
+                    indoor_ref = cond.comfort.heat_to
+                else:
+                    indoor_ref = cond.current_temp
+            space_xover = self.economics.compute_space_crossover_temperature(
+                space=space,
+                tariffs=snapshot.tariffs,
+                topology=self.topology,
+                indoor_temp_f=indoor_ref,
+                telemetry=snapshot.telemetry,
+                part_load=True,
+            )
+            if space_xover is not None:
+                space_crossover_temps[space.id] = space_xover
             if not cond:
                 candidate_space_modes[space.id] = HvacMode.OFF
                 candidate_emitters[space.id] = []
@@ -387,12 +404,32 @@ class DualFuelCoordinator:
             if p_dir.condensing_state is not None
         }
 
+        if space_crossover_temps:
+            active_weights: list[tuple[float, float]] = []
+            all_weights: list[tuple[float, float]] = []
+            for space in self.topology.spaces:
+                if space.id not in space_crossover_temps:
+                    continue
+                xover = space_crossover_temps[space.id]
+                weight = space.ua_factor
+                all_weights.append((xover, weight))
+                cond = snapshot.spaces.get(space.id)
+                window_blocked = bool(cond and cond.window_open and self.config.passive_ventilation_override)
+                if cond is not None and cond.comfort.heat_to is not None and not window_blocked:
+                    active_weights.append((xover, weight))
+
+            chosen = active_weights or all_weights
+            total_weight = sum(w for _, w in chosen)
+            if total_weight > 0:
+                crossover_temp = sum(x * w for x, w in chosen) / total_weight
+
         diagnostics = Diagnostics(
             economic_crossover_temp=round(crossover_temp, 1),
             system_phase=system_phase,
             odu_modes=odu_operational_modes,
             space_costs_per_mmbtu=space_costs,
             space_cops=space_cops,
+            space_crossover_temps=space_crossover_temps,
             boiler_return_temps=boiler_return_temps,
             boiler_efficiencies=boiler_efficiencies,
             boiler_condensing_states=boiler_condensing_states,

@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 
 from .delivery import DeliveryUnit
-from .enums import SharedBoilerRole, ThermalProfile
+from .enums import SharedBoilerRole
 
 
 @dataclass(frozen=True)
@@ -68,7 +68,8 @@ class Space:
     # Geometry & Thermal Mass
     floor_area_sqft: float = 300.0
     ceiling_height_ft: float = 9.0
-    thermal_profile: ThermalProfile = ThermalProfile.HISTORIC_VICTORIAN
+    envelope_score: float = 5.0  # 0 (uninsulated) to 10 (Passive House)
+    thermal_mass: int = 3  # 1 (very low) to 5 (very high)
 
     # Arbitration & Priority
     priority: int = 5  # Higher values win ODU mode conflicts
@@ -81,29 +82,32 @@ class Space:
     @property
     def ua_factor(self) -> float:
         """
-        Approximate overall heat loss coefficient (BTU/hr per °F delta).
-        Derived from thermal profile archetype.
+        Approximate overall heat loss coefficient (BTU/hr per °F delta)
+        derived from the 0-10 envelope_score.
         """
-        # Historic Victorian: ~0.65 BTU/hr-°F per sqft of floor area
-        # Average: ~0.45, Modern Tight: ~0.25
-        multipliers = {
-            ThermalProfile.HISTORIC_VICTORIAN: 0.65,
-            ThermalProfile.AVERAGE_INSULATED: 0.45,
-            ThermalProfile.MODERN_TIGHT: 0.25,
-        }
-        return self.floor_area_sqft * multipliers.get(self.thermal_profile, 0.50)
+        clamped = max(0.0, min(10.0, float(self.envelope_score)))
+        # Score 0 -> 0.85, Score 5 -> 0.50, Score 10 -> 0.15 BTU/(hr-°F-sqft)
+        per_sqft = max(0.10, 0.85 - (0.07 * clamped))
+        return self.floor_area_sqft * per_sqft
 
     @property
     def thermal_capacitance_btu_per_f(self) -> float:
         """
-        Combined thermal storage mass (enclosed air + plaster/lath walls/framing/flooring).
-        Used to calculate required BTUs for setback recovery pull-up.
+        Combined thermal storage mass (enclosed air + walls/framing/flooring)
+        derived from the 1-5 thermal_mass rating. Used to calculate required BTUs
+        for setback recovery pull-up.
         """
         # Air mass: ~0.018 BTU/cuft-°F
         air_mass = self.volume_cuft * 0.018
-        # Enclosed construction mass: Victorian plaster/wood is ~15-20x air mass
-        mass_multiplier = 18.0 if self.thermal_profile == ThermalProfile.HISTORIC_VICTORIAN else 10.0
-        return air_mass * mass_multiplier
+        mass_multipliers = {
+            1: 6.0,
+            2: 10.0,
+            3: 14.0,
+            4: 18.0,
+            5: 24.0,
+        }
+        clamped = max(1, min(5, int(self.thermal_mass)))
+        return air_mass * mass_multipliers[clamped]
 
     def estimated_heat_loss_btu_per_hr(self, indoor_temp_f: float, outdoor_temp_f: float) -> float:
         """Calculates instantaneous envelope heat loss rate."""

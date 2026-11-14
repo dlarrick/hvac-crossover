@@ -4,7 +4,7 @@ import unittest
 
 from hvac_crossover.config import CoordinatorConfig
 from hvac_crossover.engines.recovery import RecoveryEngine
-from hvac_crossover.models.enums import SystemPhase, ThermalProfile
+from hvac_crossover.models.enums import SystemPhase
 from hvac_crossover.models.spaces import ComfortRange, Space, SpaceCondition
 from hvac_crossover.models.topology import SystemTopology
 
@@ -20,7 +20,8 @@ class TestRecoveryEngine(unittest.TestCase):
             id="primary_br",
             name="Primary Bedroom",
             floor_area_sqft=250.0,
-            thermal_profile=ThermalProfile.HISTORIC_VICTORIAN,
+            envelope_score=3.0,
+            thermal_mass=4,
         )
 
     def test_recovery_vs_plateau_detection(self):
@@ -67,6 +68,26 @@ class TestRecoveryEngine(unittest.TestCase):
         spaces_vent = {"primary_br": SpaceCondition(current_temp=68.0, comfort=comfort, window_open=True)}
         phase3 = self.recovery.determine_system_phase(spaces_vent, topology)
         self.assertEqual(phase3, SystemPhase.PASSIVE_VENTILATION)
+
+    def test_envelope_score_and_thermal_mass_scaling(self):
+        s_uninsulated = Space(
+            id="s0", name="S0", floor_area_sqft=100.0, ceiling_height_ft=10.0, envelope_score=0, thermal_mass=1
+        )
+        s_mid = Space(
+            id="s5", name="S5", floor_area_sqft=100.0, ceiling_height_ft=10.0, envelope_score=5, thermal_mass=3
+        )
+        s_passive = Space(
+            id="s10", name="S10", floor_area_sqft=100.0, ceiling_height_ft=10.0, envelope_score=10, thermal_mass=5
+        )
+
+        self.assertAlmostEqual(s_uninsulated.ua_factor, 85.0, places=2)
+        self.assertAlmostEqual(s_mid.ua_factor, 50.0, places=2)
+        self.assertAlmostEqual(s_passive.ua_factor, 15.0, places=2)
+
+        air_mass = 1000.0 * 0.018  # 18.0 BTU/°F
+        self.assertAlmostEqual(s_uninsulated.thermal_capacitance_btu_per_f, air_mass * 6.0, places=2)
+        self.assertAlmostEqual(s_mid.thermal_capacitance_btu_per_f, air_mass * 14.0, places=2)
+        self.assertAlmostEqual(s_passive.thermal_capacitance_btu_per_f, air_mass * 24.0, places=2)
 
 
 if __name__ == "__main__":
