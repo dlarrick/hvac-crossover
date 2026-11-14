@@ -69,6 +69,8 @@ class Space:
     floor_area_sqft: float = 300.0
     ceiling_height_ft: float = 9.0
     thermal_profile: ThermalProfile = ThermalProfile.HISTORIC_VICTORIAN
+    envelope_score: float | None = None  # 0 (uninsulated) to 10 (Passive House)
+    thermal_mass: int | None = None  # 1 (very low) to 5 (very high)
 
     # Arbitration & Priority
     priority: int = 5  # Higher values win ODU mode conflicts
@@ -82,8 +84,14 @@ class Space:
     def ua_factor(self) -> float:
         """
         Approximate overall heat loss coefficient (BTU/hr per °F delta).
-        Derived from thermal profile archetype.
+        Uses continuous 0-10 envelope_score if set, else falls back to ThermalProfile archetype.
         """
+        if self.envelope_score is not None:
+            clamped = max(0.0, min(10.0, float(self.envelope_score)))
+            # Score 0 -> 0.85, Score 5 -> 0.50, Score 10 -> 0.15 BTU/(hr-°F-sqft)
+            per_sqft = max(0.10, 0.85 - (0.07 * clamped))
+            return self.floor_area_sqft * per_sqft
+
         # Historic Victorian: ~0.65 BTU/hr-°F per sqft of floor area
         # Average: ~0.45, Modern Tight: ~0.25
         multipliers = {
@@ -98,9 +106,20 @@ class Space:
         """
         Combined thermal storage mass (enclosed air + plaster/lath walls/framing/flooring).
         Used to calculate required BTUs for setback recovery pull-up.
+        Uses 1-5 thermal_mass if set, else falls back to ThermalProfile archetype.
         """
         # Air mass: ~0.018 BTU/cuft-°F
         air_mass = self.volume_cuft * 0.018
+        if self.thermal_mass is not None:
+            mass_multipliers = {
+                1: 6.0,
+                2: 10.0,
+                3: 14.0,
+                4: 18.0,
+                5: 24.0,
+            }
+            clamped = max(1, min(5, int(self.thermal_mass)))
+            return air_mass * mass_multipliers[clamped]
         # Enclosed construction mass: Victorian plaster/wood is ~15-20x air mass
         mass_multiplier = 18.0 if self.thermal_profile == ThermalProfile.HISTORIC_VICTORIAN else 10.0
         return air_mass * mass_multiplier

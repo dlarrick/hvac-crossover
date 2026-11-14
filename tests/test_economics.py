@@ -241,6 +241,68 @@ class TestEconomicsEngine(unittest.TestCase):
         cop_star = self.economics.compute_crossover_cop(tariffs, oil_boiler)
         self.assertAlmostEqual(cop_star, 2.27, places=1)
 
+    def test_compute_space_crossover_temperature(self):
+        from hvac_crossover.models.delivery import HydronicEmitter, MiniSplitHead
+        from hvac_crossover.models.enums import EmitterType, ThermalProfile
+        from hvac_crossover.models.producers import ProducerProfileFactory
+        from hvac_crossover.models.spaces import Space
+        from hvac_crossover.models.topology import SystemTopology
+
+        tariffs = TariffSchedule(elec_cost_per_kwh=0.25, gas_cost_per_therm=1.88)
+        hp = ProducerProfileFactory.load_from_json(
+            "hvac_crossover/profiles/producers/mitsubishi/mxz_xcxxnahz2.json",
+            producer_id="hp1",
+            name="HP",
+            nominal_btu=30000,
+        )
+        boiler = ProducerProfileFactory.load_from_json(
+            "hvac_crossover/profiles/producers/burnham/alta.json",
+            producer_id="b1",
+            name="Boiler",
+            nominal_btu=150000,
+        )
+
+        # Single-source space -> None
+        hp_only = Space(
+            id="hp_only",
+            name="HP Only",
+            emitters=[MiniSplitHead(id="h_only", producer_id="hp1")],
+        )
+        # Small baseboard space -> lower crossover than system-wide due to return temp & cycling
+        small_bb = Space(
+            id="small_bb",
+            name="Small Baseboard",
+            floor_area_sqft=800.0,
+            thermal_profile=ThermalProfile.HISTORIC_VICTORIAN,
+            emitters=[
+                MiniSplitHead(id="h1", producer_id="hp1"),
+                HydronicEmitter(id="e1", producer_id="b1", emitter_type=EmitterType.FIN_TUBE_BASEBOARD),
+            ],
+        )
+        # Radiant space -> higher crossover than baseboard (condenses better)
+        radiant = Space(
+            id="radiant",
+            name="Radiant",
+            floor_area_sqft=800.0,
+            thermal_profile=ThermalProfile.HISTORIC_VICTORIAN,
+            emitters=[
+                MiniSplitHead(id="h2", producer_id="hp1"),
+                HydronicEmitter(id="e2", producer_id="b1", emitter_type=EmitterType.IN_FLOOR_RADIANT),
+            ],
+        )
+        topo = SystemTopology(producers=[hp, boiler], spaces=[hp_only, small_bb, radiant])
+
+        sys_xover = self.economics.compute_crossover_temperature(tariffs, hp, boiler)
+        self.assertIsNone(self.economics.compute_space_crossover_temperature(hp_only, tariffs, topo))
+
+        bb_xover = self.economics.compute_space_crossover_temperature(small_bb, tariffs, topo, indoor_temp_f=68.0)
+        rad_xover = self.economics.compute_space_crossover_temperature(radiant, tariffs, topo, indoor_temp_f=68.0)
+        self.assertIsNotNone(bb_xover)
+        self.assertIsNotNone(rad_xover)
+        self.assertLess(bb_xover, sys_xover)
+        self.assertLess(bb_xover, rad_xover)
+        self.assertAlmostEqual(bb_xover, 32.3, delta=0.3)
+
 
 if __name__ == "__main__":
     unittest.main()

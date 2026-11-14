@@ -68,6 +68,26 @@ class TestRecoveryEngine(unittest.TestCase):
         phase3 = self.recovery.determine_system_phase(spaces_vent, topology)
         self.assertEqual(phase3, SystemPhase.PASSIVE_VENTILATION)
 
+    def test_envelope_score_and_thermal_mass_scaling(self):
+        s_uninsulated = Space(
+            id="s0", name="S0", floor_area_sqft=100.0, ceiling_height_ft=10.0, envelope_score=0, thermal_mass=1
+        )
+        s_mid = Space(
+            id="s5", name="S5", floor_area_sqft=100.0, ceiling_height_ft=10.0, envelope_score=5, thermal_mass=3
+        )
+        s_passive = Space(
+            id="s10", name="S10", floor_area_sqft=100.0, ceiling_height_ft=10.0, envelope_score=10, thermal_mass=5
+        )
+
+        self.assertAlmostEqual(s_uninsulated.ua_factor, 85.0, places=2)
+        self.assertAlmostEqual(s_mid.ua_factor, 50.0, places=2)
+        self.assertAlmostEqual(s_passive.ua_factor, 15.0, places=2)
+
+        air_mass = 1000.0 * 0.018  # 18.0 BTU/°F
+        self.assertAlmostEqual(s_uninsulated.thermal_capacitance_btu_per_f, air_mass * 6.0, places=2)
+        self.assertAlmostEqual(s_mid.thermal_capacitance_btu_per_f, air_mass * 14.0, places=2)
+        self.assertAlmostEqual(s_passive.thermal_capacitance_btu_per_f, air_mass * 24.0, places=2)
+
 
 if __name__ == "__main__":
     unittest.main()

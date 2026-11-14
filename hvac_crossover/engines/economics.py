@@ -83,6 +83,92 @@ class EconomicsEngine:
 
         return round((low + high) / 2.0, 1)
 
+    def compute_space_crossover_temperature(
+        self,
+        space: Space,
+        tariffs: TariffSchedule,
+        topology: SystemTopology,
+        indoor_temp_f: float = 68.0,
+        telemetry: dict[str, Any] | None = None,
+        part_load: bool = True,
+        temp_bounds: tuple[float, float] = (-15.0, 65.0),
+    ) -> float | None:
+        """
+        Finds the outdoor ambient temperature where a specific space's best heat pump
+        emitter and best fuel-burning emitter have equal delivered $/MMBtu, accounting
+        for space heat loss (load_btu), boiler short-cycling derates, emitter return
+        water temperature estimates, and mini-split line-loss derates.
+        """
+        hp_emitters: list[DeliveryUnit] = []
+        fuel_emitters: list[DeliveryUnit] = []
+        for emitter in space.emitters:
+            producer = topology.get_producer(emitter.producer_id)
+            if producer is None:
+                continue
+            if isinstance(producer, InverterHeatPumpProducer):
+                hp_emitters.append(emitter)
+            else:
+                fuel_emitters.append(emitter)
+
+        if not hp_emitters or not fuel_emitters:
+            return None
+
+        def cost_diff(temp_f: float) -> float | None:
+            load_btu = space.estimated_heat_loss_btu_per_hr(indoor_temp_f, temp_f)
+            hp_cost = min(
+                self.evaluate_delivery_unit_cost(
+                    delivery_unit=e,
+                    outdoor_temp_f=temp_f,
+                    tariffs=tariffs,
+                    topology=topology,
+                    load_btu=load_btu,
+                    telemetry=telemetry,
+                    part_load=part_load,
+                    safety_band_f=-1000.0,
+                )[0]
+                for e in hp_emitters
+            )
+            fuel_cost = min(
+                self.evaluate_delivery_unit_cost(
+                    delivery_unit=e,
+                    outdoor_temp_f=temp_f,
+                    tariffs=tariffs,
+                    topology=topology,
+                    load_btu=load_btu,
+                    telemetry=telemetry,
+                    part_load=part_load,
+                )[0]
+                for e in fuel_emitters
+            )
+            if hp_cost == float("inf") or fuel_cost == float("inf"):
+                return None
+            return hp_cost - fuel_cost
+
+        low, high = temp_bounds
+        diff_low = cost_diff(low)
+        diff_high = cost_diff(high)
+        if diff_low is None or diff_high is None:
+            return None
+
+        if diff_low <= 0.0:
+            return low  # Heat pump is cheaper across the entire range
+        if diff_high >= 0.0:
+            return high  # Fuel emitter is cheaper across the entire range
+
+        for _ in range(50):
+            mid = (low + high) / 2.0
+            diff_mid = cost_diff(mid)
+            if diff_mid is None:
+                return None
+            if abs(diff_mid) < 0.01:
+                return round(mid, 1)
+            if diff_mid > 0.0:
+                low = mid
+            else:
+                high = mid
+
+        return round((low + high) / 2.0, 1)
+
     def evaluate_delivery_unit_cost(
         self,
         delivery_unit: DeliveryUnit,

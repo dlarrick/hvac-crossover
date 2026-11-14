@@ -420,6 +420,50 @@ class TestDualFuelCoordinator(unittest.TestCase):
         self.assertEqual(plan.space_directives["guest_room"].action, HvacAction.IDLE)
         self.assertEqual(plan.space_directives["guest_room"].explanation, "Mode: cool, Action: idle")
 
+    def test_diagnostics_populates_space_crossover_temps(self):
+        """
+        Diagnostics.space_crossover_temps is populated per dual-fuel space
+        (even when idle/satisfied) and scales with space load.
+        """
+        plan = self.coordinator.evaluate_conditions(
+            outdoor_temp=45.0,
+            tariffs=self.tariffs,
+            spaces={
+                "loft": {"current": 70.0, "heat_to": 68.0},  # satisfied, 400 sqft
+                "primary_br": {"current": 70.0, "heat_to": 68.0},  # satisfied, 250 sqft
+                "guest_room": {"current": 70.0, "heat_to": 68.0},  # satisfied, 200 sqft
+                "first_floor": {"current": 70.0, "heat_to": 68.0},  # satisfied, large
+            },
+        )
+        xovers = plan.diagnostics.space_crossover_temps
+        self.assertIn("loft", xovers)
+        self.assertIn("primary_br", xovers)
+        self.assertIn("guest_room", xovers)
+        self.assertIn("first_floor", xovers)
+        # Smaller spaces have higher boiler short-cycling penalties -> lower crossover temp
+        self.assertLess(xovers["guest_room"], xovers["primary_br"])
+        self.assertLess(xovers["primary_br"], xovers["loft"])
+        self.assertLess(xovers["loft"], xovers["first_floor"])
+
+        # System-wide economic_crossover_temp is the ua_factor-weighted average
+        expected_weighted = sum(xovers[s.id] * s.ua_factor for s in self.topology.spaces if s.id in xovers) / sum(
+            s.ua_factor for s in self.topology.spaces if s.id in xovers
+        )
+        self.assertAlmostEqual(plan.diagnostics.economic_crossover_temp, round(expected_weighted, 1), places=1)
+
+        # If first_floor is OFF (heat_to=None), it is excluded from the active weighted average
+        plan_no_ff = self.coordinator.evaluate_conditions(
+            outdoor_temp=45.0,
+            tariffs=self.tariffs,
+            spaces={
+                "loft": {"current": 70.0, "heat_to": 68.0},
+                "primary_br": {"current": 70.0, "heat_to": 68.0},
+                "guest_room": {"current": 70.0, "heat_to": 68.0},
+                "first_floor": {"current": 70.0},  # heat_to=None (OFF)
+            },
+        )
+        self.assertLess(plan_no_ff.diagnostics.economic_crossover_temp, plan.diagnostics.economic_crossover_temp)
+
 
 if __name__ == "__main__":
     unittest.main()
