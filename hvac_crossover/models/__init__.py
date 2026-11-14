@@ -17,7 +17,6 @@ from .enums import (
     ProducerType,
     SharedBoilerRole,
     SystemPhase,
-    ThermalProfile,
 )
 from .plan import (
     Diagnostics,
@@ -50,7 +49,6 @@ __all__ = [
     "EmitterType",
     "FuelType",
     "NetMeteringMode",
-    "ThermalProfile",
     "SharedBoilerRole",
     "SystemPhase",
     "TariffSchedule",

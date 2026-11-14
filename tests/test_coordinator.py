@@ -14,7 +14,6 @@ from hvac_crossover import (
     SystemPhase,
     SystemTopology,
     TariffSchedule,
-    ThermalProfile,
 )
 
 
@@ -39,7 +38,8 @@ class TestDualFuelCoordinator(unittest.TestCase):
                 HydronicEmitter(id="loft_baseboard", producer_id="alta150", zone_id="z3"),
             ],
             floor_area_sqft=400,
-            thermal_profile=ThermalProfile.HISTORIC_VICTORIAN,
+            envelope_score=3.0,
+            thermal_mass=4,
         )
 
         self.primary_br = Space(

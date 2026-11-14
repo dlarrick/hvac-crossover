@@ -64,14 +64,6 @@ class NetMeteringMode(str, Enum):
     NET_BILLING = "net_billing"
 
 
-class ThermalProfile(str, Enum):
-    """Envelope thermal loss and mass archetype."""
-
-    HISTORIC_VICTORIAN = "historic_victorian"
-    AVERAGE_INSULATED = "average_insulated"
-    MODERN_TIGHT = "modern_tight"
-
-
 class SharedBoilerRole(str, Enum):
     """Role in shared hydronic zone arbitration."""
 

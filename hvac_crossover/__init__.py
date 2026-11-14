@@ -38,7 +38,6 @@ from .models import (
     SystemSnapshot,
     SystemTopology,
     TariffSchedule,
-    ThermalProfile,
 )
 
 __version__ = "0.1.9"
@@ -54,7 +53,6 @@ __all__ = [
     "EmitterType",
     "FuelType",
     "NetMeteringMode",
-    "ThermalProfile",
     "SharedBoilerRole",
     "SystemPhase",
     "TariffSchedule",

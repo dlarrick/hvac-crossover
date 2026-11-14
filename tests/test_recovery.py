@@ -4,7 +4,7 @@ import unittest
 
 from hvac_crossover.config import CoordinatorConfig
 from hvac_crossover.engines.recovery import RecoveryEngine
-from hvac_crossover.models.enums import SystemPhase, ThermalProfile
+from hvac_crossover.models.enums import SystemPhase
 from hvac_crossover.models.spaces import ComfortRange, Space, SpaceCondition
 from hvac_crossover.models.topology import SystemTopology
 
@@ -20,7 +20,8 @@ class TestRecoveryEngine(unittest.TestCase):
             id="primary_br",
             name="Primary Bedroom",
             floor_area_sqft=250.0,
-            thermal_profile=ThermalProfile.HISTORIC_VICTORIAN,
+            envelope_score=3.0,
+            thermal_mass=4,
         )
 
     def test_recovery_vs_plateau_detection(self):
