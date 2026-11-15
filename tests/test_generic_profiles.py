@@ -71,12 +71,6 @@ class TestGenericHeatPumpProfiles(unittest.TestCase):
         self.assertAlmostEqual(hp.cop_at(17.0, part_load=True), 2.35)
         self.assertAlmostEqual(hp.cop_at(5.0, part_load=True), 1.70)
 
-    def test_haier_loads_and_has_part_load(self):
-        hp = ProducerProfileFactory.load_from_json(f"{PROFILES_ROOT}/haier/xuxxms2vhb.json", "haier_hp")
-        self.assertAlmostEqual(hp.cop_at(47.0), 3.19)
-        self.assertAlmostEqual(hp.cop_at(47.0, part_load=True), 3.90)
-        self.assertAlmostEqual(hp.cop_at(17.0, part_load=True), 2.80)
-
     def test_standard_hp_extrapolates_flat_below_min(self):
         hp = ProducerProfileFactory.load_from_json(f"{PROFILES_ROOT}/generic/standard_heat_pump.json", "std_hp")
         # Below the lowest data point (5°F), flat-extrapolates to 1.50
@@ -153,23 +147,17 @@ class TestGenericBoilerProfiles(unittest.TestCase):
         expected = (3.50 / 0.0915) / 0.95
         self.assertAlmostEqual(cost, expected, places=0)
 
-    def test_atmospheric_cast_iron_loads_as_steam_boiler(self):
+    def test_steam_boiler_gas_loads_and_delivered_cost(self):
         boiler = ProducerProfileFactory.load_from_json(
-            f"{PROFILES_ROOT}/generic/atmospheric_cast_iron_boiler.json",
-            "cast_iron",
+            f"{PROFILES_ROOT}/generic/steam_boiler_gas.json",
+            "steam_gas",
         )
         self.assertIsInstance(boiler, SteamBoilerProducer)
-        self.assertAlmostEqual(boiler.rated_afue, 0.82)
-        self.assertEqual(boiler.min_run_time_minutes, 20)
-
-    def test_atmospheric_cast_iron_delivered_cost(self):
-        boiler = ProducerProfileFactory.load_from_json(
-            f"{PROFILES_ROOT}/generic/atmospheric_cast_iron_boiler.json",
-            "cast_iron",
-        )
+        self.assertAlmostEqual(boiler.rated_afue, 0.81)
+        self.assertEqual(boiler.min_run_time_minutes, 25)
         cost = boiler.delivered_cost_per_mmbtu(35.0, self.tariffs_gas)
-        # $1.88/therm at 82% AFUE: ~$22.93/MMBtu
-        self.assertAlmostEqual(cost, 1.88 / (0.82 * 0.100), places=1)
+        # $1.88/therm at 81% AFUE: ~$23.21/MMBtu
+        self.assertAlmostEqual(cost, 1.88 / (0.81 * 0.100), places=1)
 
     def test_atmospheric_cast_iron_gas_profile(self):
         boiler = ProducerProfileFactory.load_from_json(
@@ -236,9 +224,6 @@ class TestGenericBoilerProfiles(unittest.TestCase):
         # Check all boiler profiles
         boiler_paths = [
             f"{PROFILES_ROOT}/generic/modulating_condensing_boiler.json",
-            f"{PROFILES_ROOT}/burnham/alta.json",
-            f"{PROFILES_ROOT}/bradford_white/bmfthw.json",
-            f"{PROFILES_ROOT}/generic/atmospheric_cast_iron_boiler.json",
             f"{PROFILES_ROOT}/generic/atmospheric_cast_iron_boiler_gas.json",
             f"{PROFILES_ROOT}/generic/atmospheric_cast_iron_boiler_oil.json",
             f"{PROFILES_ROOT}/generic/steam_boiler_gas.json",
@@ -252,15 +237,15 @@ class TestGenericBoilerProfiles(unittest.TestCase):
                 d = json.load(f)
             self.assertNotIn("nominal_heating_btu", d, f"{p} still contains nominal_heating_btu")
             self.assertNotIn("min_fire_btu", d, f"{p} still contains min_fire_btu")
+            self.assertNotIn("primary_flow_gpm", d, f"{p} still contains primary_flow_gpm")
+            self.assertNotIn("has_outdoor_reset", d, f"{p} still contains has_outdoor_reset")
+            self.assertNotIn("min_run_time_minutes", d, f"{p} still contains min_run_time_minutes")
             self.assertNotIn("vintage", d, f"{p} still contains vintage")
 
         # Check all heat pump profiles
         hp_paths = [
             f"{PROFILES_ROOT}/generic/cold_climate_heat_pump.json",
             f"{PROFILES_ROOT}/generic/standard_heat_pump.json",
-            f"{PROFILES_ROOT}/haier/xuxxms2vhb.json",
-            f"{PROFILES_ROOT}/mitsubishi/mxz_xdxxnlhz.json",
-            f"{PROFILES_ROOT}/mitsubishi/mxz_xcxxnahz2.json",
         ]
         for p in hp_paths:
             with open(p, encoding="utf-8") as f:

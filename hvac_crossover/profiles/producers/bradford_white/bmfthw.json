@@ -1,9 +1,0 @@
-{
-  "make": "Bradford White",
-  "series": "Brute FT",
-  "model": "B/MFTHW",
-  "producer_type": "modulating_boiler",
-  "fuel_type": "propane",
-  "turndown_ratio": 10.0,
-  "rated_afue": 0.95
-}

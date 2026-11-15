@@ -4,10 +4,13 @@ import unittest
 
 from hvac_crossover import (
     DualFuelCoordinator,
+    FuelType,
     HvacAction,
     HvacMode,
     HydronicEmitter,
+    InverterHeatPumpProducer,
     MiniSplitHead,
+    ModulatingBoilerProducer,
     ProducerProfileFactory,
     SharedBoilerRole,
     Space,
@@ -19,15 +22,32 @@ from hvac_crossover import (
 
 class TestDualFuelCoordinator(unittest.TestCase):
     def setUp(self):
-        # Setup Doug's exact Victorian hardware topology
-        self.odu1 = ProducerProfileFactory.load_from_json(
-            "hvac_crossover/profiles/producers/mitsubishi/mxz_xcxxnahz2.json", "odu1"
+        # Setup multi-zone dual-fuel hardware topology
+        self.odu1 = InverterHeatPumpProducer(
+            id="odu1",
+            name="Test ODU1",
+            nominal_btu=24000.0,
+            cop_curve_full_load={47.0: 3.30, 17.0: 2.00, 5.0: 1.95, -13.0: 1.75},
+            cop_curve_part_load={47.0: 4.00, 17.0: 2.65, 5.0: 2.30},
+            capacity_derate_curve={47.0: 1.0, 17.0: 1.0, 5.0: 1.0, -13.0: 0.748},
+            min_operational_temp_f=-13.0,
         )
-        self.odu2 = ProducerProfileFactory.load_from_json(
-            "hvac_crossover/profiles/producers/mitsubishi/mxz_xdxxnlhz.json", "odu2"
+        self.odu2 = InverterHeatPumpProducer(
+            id="odu2",
+            name="Test ODU2",
+            nominal_btu=24000.0,
+            cop_curve_full_load={47.0: 3.11, 17.0: 1.94, 5.0: 2.00, -13.0: 2.15},
+            cop_curve_part_load={47.0: 4.00, 17.0: 2.76, 5.0: 2.30},
+            capacity_derate_curve={47.0: 1.0, 17.0: 1.0, 5.0: 1.0, -13.0: 0.873},
+            min_operational_temp_f=-13.0,
         )
-        self.boiler = ProducerProfileFactory.load_from_json(
-            "hvac_crossover/profiles/producers/burnham/alta.json", "alta150"
+        self.boiler = ModulatingBoilerProducer(
+            id="alta150",
+            name="Test Boiler",
+            nominal_btu=100000.0,
+            fuel_type=FuelType.NATURAL_GAS,
+            rated_afue=0.95,
+            turndown_ratio=7.5,
         )
 
         self.loft = Space(
@@ -144,7 +164,7 @@ class TestDualFuelCoordinator(unittest.TestCase):
 
     def test_odu2_conflict_first_floor_mild_heat_and_guest_room_cool(self):
         """
-        Doug's real-life scenario:
+        Multi-split mode conflict with dual-heat fallback:
         - First Floor calls for heat (67°F vs 68°F, deficit 1.0°F < 3.0°F recovery threshold).
         - Guest Room calls for cool (72°F vs 70°F, cool deficit 2.0°F).
         - ODU2 must NOT conflict. First Floor f1_cassette yields on ODU2.
@@ -243,8 +263,15 @@ class TestDualFuelCoordinator(unittest.TestCase):
         When outdoor temp is below the heat pump operational envelope + safety band,
         the heat pump is locked out and heating falls back to hydronics.
         """
-        haier = ProducerProfileFactory.load_from_json("haier/xuxxms2vhb.json", "odu_haier")
-        boiler = ProducerProfileFactory.load_from_json("bradford_white/bmfthw.json", "bw_boiler")
+        haier = ProducerProfileFactory.load_from_json("generic/cold_climate_heat_pump.json", "odu_haier")
+        boiler = ModulatingBoilerProducer(
+            id="bw_boiler",
+            name="Propane Boiler",
+            nominal_btu=100000.0,
+            fuel_type=FuelType.PROPANE,
+            rated_afue=0.95,
+            turndown_ratio=10.0,
+        )
         condo = Space(
             id="condo",
             name="Condo",
@@ -276,7 +303,7 @@ class TestDualFuelCoordinator(unittest.TestCase):
         When outdoor temp is below envelope + safety band and space has only heat pump,
         heating is safely disabled.
         """
-        haier = ProducerProfileFactory.load_from_json("haier/xuxxms2vhb.json", "odu_haier")
+        haier = ProducerProfileFactory.load_from_json("generic/cold_climate_heat_pump.json", "odu_haier")
         space = Space(
             id="cabin",
             name="Cabin",

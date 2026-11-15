@@ -6,7 +6,5 @@
   "fuel_type": "natural_gas",
   "turndown_ratio": 4.0,
   "rated_afue": 0.95,
-  "primary_flow_gpm": 12.0,
-  "has_outdoor_reset": false,
-  "_note": "Conservative baseline for modulating condensing (Mod-Con) boilers. Turndown ratio of 4:1 is deliberately conservative — many units achieve 5:1 or higher. Primary loop flow rate 12 GPM with continuous condensing curve modeling."
+  "_note": "Conservative baseline for modulating condensing (Mod-Con) boilers. Turndown ratio of 4:1 is deliberately conservative — many units achieve 5:1 or higher."
 }

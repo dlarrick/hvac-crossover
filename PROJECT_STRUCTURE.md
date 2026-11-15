@@ -26,13 +26,9 @@ hvac-crossover/
 │   │   ├── spaces.py               # Space, SpaceCondition, ComfortRange
 │   │   ├── tariffs.py              # TariffSchedule (electric, gas, propane, oil rate math)
 │   │   └── topology.py             # SystemTopology (graph of producers, emitters, spaces)
-│   └── profiles/                   # Manufacturer & generic equipment performance profiles (JSON)
+│   └── profiles/                   # Built-in generic fallback equipment performance profiles (JSON)
 │       └── producers/
-│           ├── bradford_white/     # Brute FT condensing boilers (bmfthw.json)
-│           ├── burnham/            # Alta condensing boilers (alta.json)
-│           ├── generic/            # Cold-climate HP, standard HP, mod-con boiler, atmospheric boiler, steam boiler, furnace
-│           ├── haier/              # FlexFit multi-split ODUs (xuxxms2vhb.json)
-│           └── mitsubishi/         # Hyper-Heat ODUs (mxz_xcxxnahz2.json, mxz_xdxxnlhz.json)
+│           └── generic/            # Cold-climate HP, standard HP, mod-con boiler, atmospheric boiler, steam boiler, furnace
 ├── tests/                          # Complete unit test suite
 │   ├── test_arbitrator.py          # ODU mode locking, shared-zone fallback arbitration
 │   ├── test_comfort_range.py       # Deadband, heating/cooling deficits, float logic

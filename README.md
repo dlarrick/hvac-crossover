@@ -37,10 +37,10 @@ from hvac_crossover import (
 
 # 1. Define Equipment Topology
 odu = ProducerProfileFactory.load_from_json(
-    "profiles/producers/mitsubishi/mxz_xcxxnahz2.json", producer_id="odu1", name="Mitsubishi 30k ODU"
+    "generic/cold_climate_heat_pump.json", producer_id="odu1", name="Cold-Climate HP", nominal_btu=30000.0
 )
 boiler = ProducerProfileFactory.load_from_json(
-    "profiles/producers/burnham/alta.json", producer_id="alta150", name="Burnham Alta 150"
+    "generic/modulating_condensing_boiler.json", producer_id="alta150", name="Mod-Con Boiler", nominal_btu=150000.0
 )
 
 loft = Space(
