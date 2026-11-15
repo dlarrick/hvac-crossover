@@ -547,8 +547,6 @@ class ProducerProfileFactory:
                 cop_curve_full_load=full_cop,
                 cop_curve_part_load=part_cop,
                 capacity_derate_curve=derate_curve,
-                refrigerant=data.get("refrigerant", "R410A"),
-                max_ports=int(data.get("max_ports", 3)),
                 min_operational_temp_f=min_temp_f,
             )
 
@@ -574,8 +572,6 @@ class ProducerProfileFactory:
                 rated_afue=float(data.get("rated_afue", 0.95)),
                 min_fire_btu=min_fire,
                 turndown_ratio=turndown,
-                primary_flow_gpm=float(data.get("primary_flow_gpm", 12.0)),
-                has_outdoor_reset=bool(data.get("has_outdoor_reset", False)),
             )
 
         if p_type == "atmospheric_boiler":
@@ -614,7 +610,6 @@ class ProducerProfileFactory:
                 nominal_btu=raw_nominal if raw_nominal is not None else 100000.0,
                 fuel_type=resolved_fuel,
                 rated_afue=float(data.get("rated_afue", 0.81)),
-                min_run_time_minutes=int(data.get("min_run_time_minutes", 25)),
             )
 
         if p_type == "furnace":

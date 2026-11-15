@@ -4,7 +4,10 @@ import unittest
 
 from hvac_crossover.engines.economics import EconomicsEngine
 from hvac_crossover.models.enums import FuelType, NetMeteringMode
-from hvac_crossover.models.producers import ModulatingBoilerProducer, ProducerProfileFactory
+from hvac_crossover.models.producers import (
+    InverterHeatPumpProducer,
+    ModulatingBoilerProducer,
+)
 from hvac_crossover.models.tariffs import TariffSchedule
 
 
@@ -17,11 +20,22 @@ class TestEconomicsEngine(unittest.TestCase):
             solar_export_credit=0.05,
             net_metering_mode=NetMeteringMode.ONE_TO_ONE,
         )
-        self.odu1 = ProducerProfileFactory.load_from_json(
-            "hvac_crossover/profiles/producers/mitsubishi/mxz_xcxxnahz2.json", "odu1"
+        self.odu1 = InverterHeatPumpProducer(
+            id="odu1",
+            name="Test Cold-Climate HP",
+            nominal_btu=24000.0,
+            cop_curve_full_load={47.0: 3.30, 17.0: 2.00, 5.0: 1.95, -13.0: 1.75},
+            cop_curve_part_load={47.0: 4.00, 17.0: 2.65, 5.0: 2.30},
+            capacity_derate_curve={47.0: 1.0, 17.0: 1.0, 5.0: 1.0, -13.0: 0.748},
+            min_operational_temp_f=-13.0,
         )
-        self.boiler = ProducerProfileFactory.load_from_json(
-            "hvac_crossover/profiles/producers/burnham/alta.json", "alta150"
+        self.boiler = ModulatingBoilerProducer(
+            id="alta150",
+            name="Test Mod-Con Boiler",
+            nominal_btu=100000.0,
+            fuel_type=FuelType.NATURAL_GAS,
+            rated_afue=0.95,
+            turndown_ratio=7.5,
         )
 
     def test_crossover_cop_derivation(self):
@@ -244,22 +258,26 @@ class TestEconomicsEngine(unittest.TestCase):
     def test_compute_space_crossover_temperature(self):
         from hvac_crossover.models.delivery import HydronicEmitter, MiniSplitHead
         from hvac_crossover.models.enums import EmitterType
-        from hvac_crossover.models.producers import ProducerProfileFactory
         from hvac_crossover.models.spaces import Space
         from hvac_crossover.models.topology import SystemTopology
 
         tariffs = TariffSchedule(elec_cost_per_kwh=0.25, gas_cost_per_therm=1.88)
-        hp = ProducerProfileFactory.load_from_json(
-            "hvac_crossover/profiles/producers/mitsubishi/mxz_xcxxnahz2.json",
-            producer_id="hp1",
+        hp = InverterHeatPumpProducer(
+            id="hp1",
             name="HP",
-            nominal_btu=30000,
+            nominal_btu=30000.0,
+            cop_curve_full_load={47.0: 3.30, 17.0: 2.00, 5.0: 1.95, -13.0: 1.75},
+            cop_curve_part_load={47.0: 4.00, 17.0: 2.65, 5.0: 2.30},
+            capacity_derate_curve={47.0: 1.0, 17.0: 1.0, 5.0: 1.0, -13.0: 0.748},
+            min_operational_temp_f=-13.0,
         )
-        boiler = ProducerProfileFactory.load_from_json(
-            "hvac_crossover/profiles/producers/burnham/alta.json",
-            producer_id="b1",
+        boiler = ModulatingBoilerProducer(
+            id="b1",
             name="Boiler",
-            nominal_btu=150000,
+            nominal_btu=150000.0,
+            fuel_type=FuelType.NATURAL_GAS,
+            rated_afue=0.95,
+            turndown_ratio=7.5,
         )
 
         # Single-source space -> None

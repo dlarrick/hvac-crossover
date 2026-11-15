@@ -1,9 +1,0 @@
-{
-  "make": "Burnham (U.S. Boiler Company)",
-  "series": "Alta Modulating Condensing",
-  "model": "Alta",
-  "producer_type": "modulating_boiler",
-  "fuel_type": "natural_gas",
-  "turndown_ratio": 7.5,
-  "rated_afue": 0.95
-}
