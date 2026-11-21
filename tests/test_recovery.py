@@ -48,7 +48,7 @@ class TestRecoveryEngine(unittest.TestCase):
             target_hours=1.0,
         )
         # Victorian 250 sqft with 9ft ceilings has significant thermal mass soak
-        self.assertGreater(btu_req, 8000.0)
+        self.assertGreater(btu_req, 6000.0)
 
     def test_system_phase_determination(self):
         comfort = ComfortRange(heat_to=68.0)
@@ -71,8 +71,9 @@ class TestRecoveryEngine(unittest.TestCase):
 
     def test_envelope_score_and_thermal_mass_scaling(self):
         s_uninsulated = Space(
-            id="s0", name="S0", floor_area_sqft=100.0, ceiling_height_ft=10.0, envelope_score=0, thermal_mass=1
+            id="s1", name="S1", floor_area_sqft=100.0, ceiling_height_ft=10.0, envelope_score=1, thermal_mass=1
         )
+        s_legacy_zero = Space(id="s0", name="S0", floor_area_sqft=100.0, envelope_score=0)
         s_mid = Space(
             id="s5", name="S5", floor_area_sqft=100.0, ceiling_height_ft=10.0, envelope_score=5, thermal_mass=3
         )
@@ -80,9 +81,22 @@ class TestRecoveryEngine(unittest.TestCase):
             id="s10", name="S10", floor_area_sqft=100.0, ceiling_height_ft=10.0, envelope_score=10, thermal_mass=5
         )
 
-        self.assertAlmostEqual(s_uninsulated.ua_factor, 85.0, places=2)
-        self.assertAlmostEqual(s_mid.ua_factor, 50.0, places=2)
-        self.assertAlmostEqual(s_passive.ua_factor, 15.0, places=2)
+        self.assertAlmostEqual(s_uninsulated.ua_factor, 70.0, places=2)
+        self.assertAlmostEqual(s_legacy_zero.ua_factor, 70.0, places=2)
+        self.assertAlmostEqual(s_mid.ua_factor, 26.0, places=2)
+        self.assertAlmostEqual(s_passive.ua_factor, 6.0, places=2)
+
+        s_code = Space(id="s7", name="S7", floor_area_sqft=100.0, envelope_score=7)
+        self.assertAlmostEqual(s_code.ua_factor, 16.0, places=2)
+
+        # Internal heat-gain offset (1.0 BTU/(hr-sqft)) shifts effective balance point
+        # At score 5 (UA=26 on 100 sqft) and ΔT=3°F: gross=78 < 100 internal gains -> net=0
+        self.assertEqual(s_mid.estimated_heat_loss_btu_per_hr(68.0, 65.0), 0.0)
+        self.assertAlmostEqual(
+            s_mid.estimated_heat_loss_btu_per_hr(68.0, 65.0, include_internal_gains=False), 78.0, places=2
+        )
+        # At ΔT=20°F: gross=520, net=520-100=420
+        self.assertAlmostEqual(s_mid.estimated_heat_loss_btu_per_hr(68.0, 48.0), 420.0, places=2)
 
         air_mass = 1000.0 * 0.018  # 18.0 BTU/°F
         self.assertAlmostEqual(s_uninsulated.thermal_capacitance_btu_per_f, air_mass * 6.0, places=2)
