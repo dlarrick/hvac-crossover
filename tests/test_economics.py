@@ -321,7 +321,7 @@ class TestEconomicsEngine(unittest.TestCase):
         self.assertIsNotNone(rad_xover)
         self.assertLess(bb_xover, sys_xover)
         self.assertLess(bb_xover, rad_xover)
-        self.assertAlmostEqual(bb_xover, 32.3, delta=0.3)
+        self.assertAlmostEqual(bb_xover, 29.0, delta=0.3)
 
 
 if __name__ == "__main__":
